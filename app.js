@@ -1109,6 +1109,20 @@ function renderAll() {
 // ============================================
 // 冰箱渲染
 // ============================================
+function guessEmoji(name) {
+    const n = name;
+    if (/蛋/.test(n)) return '🥚';
+    if (/奶|芝士|黄油|酸奶/.test(n)) return '🥛';
+    if (/肉|排骨|鸡|鸭|牛|羊|猪|培根|香肠|火腿/.test(n)) return '🥩';
+    if (/鱼|虾|蟹|贝|鱿鱼|蛤蜊/.test(n)) return '🐟';
+    if (/菜|菠菜|生菜|白菜|西兰花|芹菜|韭菜|黄瓜|番茄|西红柿|土豆|萝卜|茄子|青椒|彩椒|洋葱|蘑菇|香菇|木耳|藕|山药|玉米|豆/.test(n)) return '🥬';
+    if (/苹果|香蕉|橙|橘|葡萄|草莓|蓝莓|柠檬|西瓜|梨|桃|芒果|水果/.test(n)) return '🍎';
+    if (/米|面|粉|馒头|面包|饺子|馄饨|包子|饼/.test(n)) return '🍚';
+    if (/油|盐|糖|酱|醋|料酒|生抽|老抽|蚝油|味精|鸡精|胡椒|花椒|八角|桂皮|香叶|蒜|姜|葱|辣椒/.test(n)) return '🧂';
+    if (/水|饮料|果汁|可乐|雪碧|茶|咖啡/.test(n)) return '🥤';
+    return '🧊';
+}
+
 function renderFridge() {
     const count = fridgeItems.length;
     fridgeCount.textContent = `共 ${count} 种食材`;
@@ -1120,20 +1134,6 @@ function renderFridge() {
             </div>
         `;
         return;
-    }
-
-    function guessEmoji(name) {
-        const n = name;
-        if (/蛋/.test(n)) return '🥚';
-        if (/奶|芝士|黄油|酸奶/.test(n)) return '🥛';
-        if (/肉|排骨|鸡|鸭|牛|羊|猪|培根|香肠|火腿/.test(n)) return '🥩';
-        if (/鱼|虾|蟹|贝|鱿鱼|蛤蜊/.test(n)) return '🐟';
-        if (/菜|菠菜|生菜|白菜|西兰花|芹菜|韭菜|黄瓜|番茄|西红柿|土豆|萝卜|茄子|青椒|彩椒|洋葱|蘑菇|香菇|木耳|藕|山药|玉米|豆/.test(n)) return '🥬';
-        if (/苹果|香蕉|橙|橘|葡萄|草莓|蓝莓|柠檬|西瓜|梨|桃|芒果|水果/.test(n)) return '🍎';
-        if (/米|面|粉|馒头|面包|饺子|馄饨|包子|饼/.test(n)) return '🍚';
-        if (/油|盐|糖|酱|醋|料酒|生抽|老抽|蚝油|味精|鸡精|胡椒|花椒|八角|桂皮|香叶|蒜|姜|葱|辣椒/.test(n)) return '🧂';
-        if (/水|饮料|果汁|可乐|雪碧|茶|咖啡/.test(n)) return '🥤';
-        return '🧊';
     }
 
     let html = '';
