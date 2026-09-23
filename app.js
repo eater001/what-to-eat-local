@@ -5,6 +5,8 @@ const STORAGE_KEY = 'dish_records_app';
 const FRIDGE_KEY = 'fridge_items';
 
 let recipes = [];
+let currentPage = 1;
+const PAGE_SIZE = 10;
 let fridgeItems = [];
 let currentImageBase64 = null;
 let editingId = null;
@@ -532,7 +534,9 @@ function parseFridgeText(text) {
         seen.add(cleaned); items.push(cleaned);
     });
     return items;
-}// ============================================
+}
+
+// ============================================
 // Tab 切换
 // ============================================
 document.querySelectorAll('.smart-tab').forEach(tab => {
@@ -630,12 +634,7 @@ async function saveOrUpdateRecipe() {
             const index = recipes.findIndex(r => r.id === editingId);
             if (index !== -1) {
                 const old = recipes[index];
-                const updated = {
-                    ...old,
-                    name: name,
-                    steps: steps,
-                    image: compressedImage
-                };
+                const updated = { ...old, name, steps, image: compressedImage };
                 if (!old.categoryManual) updated.category = classifyRecipe(updated);
                 recipes[index] = updated;
                 persistRecipes();
@@ -647,14 +646,12 @@ async function saveOrUpdateRecipe() {
         } else {
             const newRecipe = {
                 id: Date.now() + Math.floor(Math.random() * 1000),
-                name: name,
-                steps: steps,
-                image: compressedImage,
-                categoryManual: false
+                name, steps, image: compressedImage, categoryManual: false
             };
             newRecipe.category = classifyRecipe(newRecipe);
             recipes.unshift(newRecipe);
             persistRecipes();
+            currentPage = 1;
             renderAll();
             showToast('✅ 菜谱已保存', 1500);
             resetFormToAddMode();
@@ -989,6 +986,7 @@ function renderCategoryBar() {
     categoryBar.querySelectorAll('.category-chip').forEach(chip => {
         chip.addEventListener('click', () => {
             activeCategory = chip.getAttribute('data-category');
+            currentPage = 1;
             renderAll();
         });
     });
@@ -1020,6 +1018,7 @@ function getVisibleRecipes() {
 
 function renderRecipeList() {
     const visible = getVisibleRecipes();
+
     if (visible.length === 0) {
         recipeListEl.innerHTML = `
             <div class="empty-message">
@@ -1031,8 +1030,15 @@ function renderRecipeList() {
         return;
     }
 
+    const totalPages = Math.ceil(visible.length / PAGE_SIZE);
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const pageItems = visible.slice(start, start + PAGE_SIZE);
+
     let html = '';
-    visible.forEach(recipe => {
+    pageItems.forEach(recipe => {
         const imageHtml = recipe.image
             ? `<img src="${recipe.image}" alt="${escapeHtml(recipe.name)}" loading="lazy">`
             : `<span>🍽️</span>`;
@@ -1063,7 +1069,31 @@ function renderRecipeList() {
             </div>
         `;
     });
+
+    if (totalPages > 1) {
+        html += `
+            <div class="pagination">
+                <button class="page-btn" id="prevPageBtn" ${currentPage <= 1 ? 'disabled' : ''}>← 上一页</button>
+                <span class="page-info">${currentPage} / ${totalPages}</span>
+                <button class="page-btn" id="nextPageBtn" ${currentPage >= totalPages ? 'disabled' : ''}>下一页 →</button>
+            </div>
+        `;
+    }
+
     recipeListEl.innerHTML = html;
+
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            if (currentPage > 1) { currentPage--; renderRecipeList(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+        });
+    }
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            if (currentPage < totalPages) { currentPage++; renderRecipeList(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+        });
+    }
 
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -1298,6 +1328,7 @@ function importBackup(file) {
                     }
                     persistRecipes();
                     persistFridge();
+                    currentPage = 1;
                     renderAll();
                     renderFridge();
                     showToast(`✅ 已导入 ${recipes.length} 道菜谱`, 2000);
