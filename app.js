@@ -3,6 +3,10 @@
 // ============================================
 const STORAGE_KEY = 'dish_records_app';
 const FRIDGE_KEY = 'fridge_items';
+const CALENDAR_KEY = 'cook_calendar';
+const PROFILE_KEY = 'user_profile';
+const WEIGHT_KEY = 'weight_records';
+const EXERCISE_KEY = 'exercise_records';
 
 let recipes = [];
 let currentPage = 1;
@@ -22,7 +26,18 @@ let confirmCallback = null;
 let guestList = [];
 let isGuestMode = false;
 
+// 新功能状态
+let cookCalendar = [];        // [{ id, date, recipeId, recipeName, note, planned }]
+let calendarYear = new Date().getFullYear();
+let calendarMonth = new Date().getMonth();
+let userProfile = { avatar: null, nickname: '', height: 170 };
+let weightRecords = [];       // [{ id, date, weight }]
+let exerciseRecords = [];     // [{ id, date, type, duration }]
+let fridgeEditingId = null;
+
+// ============================================
 // DOM 缓存
+// ============================================
 const appContainer = document.getElementById('appContainer');
 const previewImg = document.getElementById('previewImg');
 const previewPlaceholder = document.getElementById('previewPlaceholder');
@@ -106,6 +121,59 @@ const confirmMessage = document.getElementById('confirmMessage');
 const confirmCancelBtn = document.getElementById('confirmCancelBtn');
 const confirmOkBtn = document.getElementById('confirmOkBtn');
 
+// 新功能 DOM
+const calendarBtn = document.getElementById('calendarBtn');
+const calendarOverlay = document.getElementById('calendarOverlay');
+const calendarCloseBtn = document.getElementById('calendarCloseBtn');
+const calGrid = document.getElementById('calGrid');
+const calMonthLabel = document.getElementById('calMonthLabel');
+const calPrevBtn = document.getElementById('calPrevBtn');
+const calNextBtn = document.getElementById('calNextBtn');
+const calTodayBtn = document.getElementById('calTodayBtn');
+const calPlanBtn = document.getElementById('calPlanBtn');
+
+const profileBtn = document.getElementById('profileBtn');
+const profileOverlay = document.getElementById('profileOverlay');
+const profileCloseBtn = document.getElementById('profileCloseBtn');
+const avatarPreview = document.getElementById('avatarPreview');
+const avatarInput = document.getElementById('avatarInput');
+const avatarPickBtn = document.getElementById('avatarPickBtn');
+const nicknameInput = document.getElementById('nicknameInput');
+const heightInput = document.getElementById('heightInput');
+const profileSaveBtn = document.getElementById('profileSaveBtn');
+const weightInput = document.getElementById('weightInput');
+const weightDate = document.getElementById('weightDate');
+const weightAddBtn = document.getElementById('weightAddBtn');
+const weightChart = document.getElementById('weightChart');
+const weightList = document.getElementById('weightList');
+const bmiBox = document.getElementById('bmiBox');
+
+const lightBtn = document.getElementById('lightBtn');
+const lightOverlay = document.getElementById('lightOverlay');
+const lightCloseBtn = document.getElementById('lightCloseBtn');
+const lightList = document.getElementById('lightList');
+
+const exerciseBtn = document.getElementById('exerciseBtn');
+const exerciseOverlay = document.getElementById('exerciseOverlay');
+const exerciseCloseBtn = document.getElementById('exerciseCloseBtn');
+const exType = document.getElementById('exType');
+const exDuration = document.getElementById('exDuration');
+const exAddBtn = document.getElementById('exAddBtn');
+const exStats = document.getElementById('exStats');
+const exList = document.getElementById('exList');
+
+const shakeBtn = document.getElementById('shakeBtn');
+const shakeOverlay = document.getElementById('shakeOverlay');
+const shakeResult = document.getElementById('shakeResult');
+const shakeCloseBtn = document.getElementById('shakeCloseBtn');
+const shakeAgainBtn = document.getElementById('shakeAgainBtn');
+
+const fridgeEditOverlay = document.getElementById('fridgeEditOverlay');
+const fridgeEditName = document.getElementById('fridgeEditName');
+const fridgeEditDate = document.getElementById('fridgeEditDate');
+const fridgeEditCancel = document.getElementById('fridgeEditCancel');
+const fridgeEditSave = document.getElementById('fridgeEditSave');
+
 // ============================================
 // 工具函数
 // ============================================
@@ -145,6 +213,11 @@ function compressImage(base64, maxSize = 600, quality = 0.6) {
         img.onerror = () => resolve(null);
         img.src = base64;
     });
+}
+
+function todayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 // ============================================
@@ -217,6 +290,27 @@ function getCategoryInfo(key) {
     return CATEGORIES.find(c => c.key === key) || CATEGORIES[CATEGORIES.length - 1];
 }
 
+// 根据菜名猜 emoji
+function guessDishEmoji(name) {
+    const n = name || '';
+    if (/汤|羹|煲/.test(n)) return '🍲';
+    if (/面|粉|米线|拉面/.test(n)) return '🍜';
+    if (/炒饭|盖饭|拌饭|米饭/.test(n)) return '🍚';
+    if (/沙拉|凉拌|凉菜/.test(n)) return '🥗';
+    if (/蛋糕|甜品|布丁|奶昔|冰/.test(n)) return '🍰';
+    if (/鸡|鸭|鹅/.test(n)) return '🍗';
+    if (/牛|羊|猪|肉|排骨/.test(n)) return '🥩';
+    if (/鱼|虾|蟹|海鲜/.test(n)) return '🦐';
+    if (/饺|馄饨|包子|馒头/.test(n)) return '🥟';
+    if (/饼|披萨/.test(n)) return '🥞';
+    if (/菜|蔬/.test(n)) return '🥬';
+    if (/蛋/.test(n)) return '🥚';
+    if (/豆腐/.test(n)) return '🧈';
+    if (/粥/.test(n)) return '🥣';
+    if (/茶|奶茶|咖啡/.test(n)) return '🧋';
+    return '🍽️';
+}
+
 // ============================================
 // 本地存储
 // ============================================
@@ -249,7 +343,9 @@ function loadFridge() {
     } catch (e) { fridgeItems = []; }
     fridgeItems = fridgeItems.map(f => ({
         id: f.id || Date.now() + Math.random(),
-        name: f.name || ''
+        name: f.name || '',
+        expireDate: f.expireDate || null,
+        addedAt: f.addedAt || todayStr()
     })).filter(f => f.name.trim());
 }
 
@@ -260,6 +356,30 @@ function persistFridge() {
         showToast('存储空间不足', 2000);
     }
 }
+
+function loadCalendar() {
+    try { cookCalendar = JSON.parse(localStorage.getItem(CALENDAR_KEY) || '[]'); }
+    catch (e) { cookCalendar = []; }
+}
+function persistCalendar() {
+    localStorage.setItem(CALENDAR_KEY, JSON.stringify(cookCalendar));
+}
+
+function loadProfile() {
+    try {
+        userProfile = JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null') || { avatar: null, nickname: '', height: 170 };
+    } catch (e) { userProfile = { avatar: null, nickname: '', height: 170 }; }
+    try { weightRecords = JSON.parse(localStorage.getItem(WEIGHT_KEY) || '[]'); }
+    catch (e) { weightRecords = []; }
+}
+function persistProfile() { localStorage.setItem(PROFILE_KEY, JSON.stringify(userProfile)); }
+function persistWeight() { localStorage.setItem(WEIGHT_KEY, JSON.stringify(weightRecords)); }
+
+function loadExercise() {
+    try { exerciseRecords = JSON.parse(localStorage.getItem(EXERCISE_KEY) || '[]'); }
+    catch (e) { exerciseRecords = []; }
+}
+function persistExercise() { localStorage.setItem(EXERCISE_KEY, JSON.stringify(exerciseRecords)); }
 
 // ============================================
 // 智能提取
@@ -365,6 +485,17 @@ function performExtract() {
 // ============================================
 // OCR
 // ============================================
+function cleanOcrText(text) {
+    if (!text) return '';
+    return text
+        .replace(/[|｜]/g, ' ')
+        .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+        .replace(/[Ａ-Ｚａ-ｚ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+        .replace(/。{2,}/g, '。')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
 async function getOcrWorker(progressTarget) {
     if (ocrWorker) return ocrWorker;
     showToast('正在加载识别引擎（首次约需10秒）...', 3000);
@@ -386,6 +517,16 @@ async function getOcrWorker(progressTarget) {
         }
     });
     return ocrWorker;
+}
+
+async function recognizeWithRetry(worker, image, retries = 1) {
+    for (let i = 0; i <= retries; i++) {
+        try {
+            const { data: { text } } = await worker.recognize(image);
+            if (text && text.trim()) return text;
+        } catch (e) { /* 重试 */ }
+    }
+    return '';
 }
 
 ocrDrop.addEventListener('click', () => ocrFileInput.click());
@@ -424,7 +565,9 @@ ocrRunBtn.addEventListener('click', async () => {
     try {
         const worker = await getOcrWorker('recipe');
         ocrStatus.textContent = '识别中...';
-        const { data: { text } } = await worker.recognize(ocrImageBase64);
+        const compressed = await compressImage(ocrImageBase64, 1200, 0.8);
+        const rawText = await recognizeWithRetry(worker, compressed || ocrImageBase64, 1);
+        const text = cleanOcrText(rawText);
         if (!text || !text.trim()) {
             showToast('未识别到文字', 2500);
             ocrStatus.textContent = '未识别到文字';
@@ -481,7 +624,9 @@ fridgeOcrRunBtn.addEventListener('click', async () => {
     try {
         const worker = await getOcrWorker('fridge');
         fridgeOcrStatus.textContent = '识别中...';
-        const { data: { text } } = await worker.recognize(fridgeOcrImageBase64);
+        const compressed = await compressImage(fridgeOcrImageBase64, 1200, 0.8);
+        const rawText = await recognizeWithRetry(worker, compressed || fridgeOcrImageBase64, 1);
+        const text = cleanOcrText(rawText);
         if (!text || !text.trim()) {
             showToast('未识别到文字', 2500);
             fridgeOcrStatus.textContent = '未识别到文字';
@@ -499,7 +644,7 @@ fridgeOcrRunBtn.addEventListener('click', async () => {
         items.forEach(name => {
             const exists = fridgeItems.some(f => f.name === name);
             if (!exists) {
-                fridgeItems.push({ id: Date.now() + Math.random(), name: name });
+                fridgeItems.push({ id: Date.now() + Math.random(), name, expireDate: null, addedAt: todayStr() });
                 added++;
             }
         });
@@ -613,7 +758,7 @@ function cancelEdit() {
 }
 
 // ============================================
-// 保存 / 更新菜谱（本地存储）
+// 保存 / 更新菜谱
 // ============================================
 async function saveOrUpdateRecipe() {
     const name = dishNameInput.value.trim();
@@ -753,6 +898,297 @@ function applyManualCategory(recipeId, newCat) {
 }
 
 // ============================================
+// 做菜日历
+// ============================================
+function markCookedToday(recipe) {
+    const today = todayStr();
+    const exists = cookCalendar.some(c => c.date === today && c.recipeId === recipe.id && !c.planned);
+    if (exists) { showToast('今天已经记录过这道菜啦', 1500); return; }
+    cookCalendar.push({
+        id: Date.now() + Math.random(),
+        date: today,
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+        note: '',
+        planned: false
+    });
+    persistCalendar();
+    showToast(`✅ 已记录「${recipe.name}」`, 1500);
+}
+
+function renderCalendar() {
+    const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
+    const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    const today = todayStr();
+
+    calMonthLabel.textContent = `${calendarYear} 年 ${calendarMonth + 1} 月`;
+
+    let html = '';
+    ['日','一','二','三','四','五','六'].forEach(d => {
+        html += `<div class="cal-head">${d}</div>`;
+    });
+    for (let i = 0; i < firstDay; i++) html += `<div class="cal-cell empty"></div>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${calendarYear}-${String(calendarMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const dishes = cookCalendar.filter(c => c.date === dateStr);
+        const isToday = dateStr === today;
+        html += `
+            <div class="cal-cell ${isToday ? 'today' : ''} ${dishes.length ? 'has-dish' : ''}" data-date="${dateStr}">
+                <span>${d}</span>
+                ${dishes.length ? `<span class="cal-dot">${dishes.length}</span>` : ''}
+            </div>`;
+    }
+    calGrid.innerHTML = html;
+
+    calGrid.querySelectorAll('.cal-cell[data-date]').forEach(cell => {
+        cell.addEventListener('click', () => showDayDishes(cell.getAttribute('data-date')));
+    });
+}
+
+function showDayDishes(date) {
+    const dishes = cookCalendar.filter(c => c.date === date);
+    if (dishes.length === 0) {
+        showConfirm({
+            icon: '📅', title: date,
+            message: '这天还没有记录，要为这天排菜吗？',
+            okText: '去排菜', okColor: '#3d6a9e',
+            onOk: () => openPlanDialog(date)
+        });
+        return;
+    }
+    const msg = dishes.map(d => `· ${d.recipeName}${d.planned ? '（计划）' : ''}`).join('\n');
+    showConfirm({
+        icon: '📅', title: date,
+        message: `这天做了：\n${msg}`,
+        okText: '关闭', okColor: '#3d6a9e',
+        onOk: () => {}
+    });
+}
+
+function openPlanDialog(date) {
+    if (recipes.length === 0) { showToast('还没有菜谱可以排', 1500); return; }
+    // 简化版：随机挑一道给这天排上，并提示
+    const pick = recipes[Math.floor(Math.random() * recipes.length)];
+    const exists = cookCalendar.some(c => c.date === date && c.recipeId === pick.id);
+    if (exists) { showToast('这天已经排过这道菜了', 1500); return; }
+    cookCalendar.push({
+        id: Date.now() + Math.random(),
+        date,
+        recipeId: pick.id,
+        recipeName: pick.name,
+        note: '',
+        planned: true
+    });
+    persistCalendar();
+    renderCalendar();
+    showToast(`✅ 已为 ${date} 排上「${pick.name}」`, 1800);
+}
+
+// ============================================
+// 个人主页
+// ============================================
+function renderProfile() {
+    // 头像
+    if (userProfile.avatar) {
+        avatarPreview.innerHTML = `<img src="${userProfile.avatar}" alt="头像">`;
+    } else {
+        avatarPreview.textContent = '👤';
+    }
+    nicknameInput.value = userProfile.nickname || '';
+    heightInput.value = userProfile.height || '';
+    renderWeight();
+}
+
+function renderWeight() {
+    // BMI
+    const h = parseFloat(userProfile.height);
+    const latest = weightRecords.length ? weightRecords[weightRecords.length - 1].weight : null;
+    if (h && latest) {
+        const bmi = latest / ((h / 100) ** 2);
+        let label = '';
+        if (bmi < 18.5) label = '偏瘦';
+        else if (bmi < 24) label = '正常';
+        else if (bmi < 28) label = '偏胖';
+        else label = '肥胖';
+        bmiBox.classList.remove('hidden');
+        bmiBox.textContent = `当前 BMI：${bmi.toFixed(1)}（${label}）`;
+    } else {
+        bmiBox.classList.add('hidden');
+    }
+
+    // 折线图
+    if (weightRecords.length < 2) {
+        weightChart.innerHTML = '<div style="text-align:center;color:#b8a18c;font-size:13px;padding:20px 0;">至少记录两次体重才能画曲线哦</div>';
+    } else {
+        const w = 300, h = 130, pad = 20;
+        const weights = weightRecords.map(r => r.weight);
+        const min = Math.min(...weights), max = Math.max(...weights);
+        const range = max - min || 1;
+        const points = weightRecords.map((r, i) => {
+            const x = pad + (i / (weightRecords.length - 1)) * (w - pad * 2);
+            const y = h - pad - ((r.weight - min) / range) * (h - pad * 2);
+            return `${x},${y}`;
+        }).join(' ');
+        weightChart.innerHTML = `
+            <svg viewBox="0 0 ${w} ${h}" class="weight-chart">
+                <polyline points="${points}" fill="none" stroke="#c0392b" stroke-width="2"/>
+                ${weightRecords.map((r, i) => {
+                    const x = pad + (i / (weightRecords.length - 1)) * (w - pad * 2);
+                    const y = h - pad - ((r.weight - min) / range) * (h - pad * 2);
+                    return `<circle cx="${x}" cy="${y}" r="3" fill="#c0392b"/>`;
+                }).join('')}
+            </svg>
+            <div class="weight-range">最低 ${min}kg / 最高 ${max}kg</div>
+        `;
+    }
+
+    // 列表
+    const list = weightRecords.slice().reverse();
+    if (list.length === 0) {
+        weightList.innerHTML = '<div style="text-align:center;color:#b8a18c;font-size:13px;padding:10px 0;">还没有体重记录</div>';
+    } else {
+        weightList.innerHTML = list.map(r => `
+            <div class="weight-item">
+                <span>${r.date} · <strong>${r.weight} kg</strong></span>
+                <button class="w-del" data-id="${r.id}" title="删除">🗑️</button>
+            </div>
+        `).join('');
+        weightList.querySelectorAll('.w-del').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = Number(btn.getAttribute('data-id'));
+                weightRecords = weightRecords.filter(r => r.id !== id);
+                persistWeight();
+                renderWeight();
+                showToast('已删除', 1000);
+            });
+        });
+    }
+}
+
+function addWeightRecord() {
+    const w = parseFloat(weightInput.value);
+    if (!w || w < 20 || w > 300) { showToast('请输入合理体重（kg）', 1500); return; }
+    const d = weightDate.value || todayStr();
+    weightRecords.push({ id: Date.now() + Math.random(), date: d, weight: w });
+    weightRecords.sort((a, b) => a.date.localeCompare(b.date));
+    persistWeight();
+    weightInput.value = '';
+    weightDate.value = '';
+    renderWeight();
+    showToast('✅ 体重已记录', 1500);
+}
+
+// ============================================
+// 轻食搭配
+// ============================================
+const LIGHT_KEYWORDS = ['沙拉','鸡胸','西兰花','水煮','蒸','凉拌','酸奶','燕麦','牛油果','番茄','黄瓜','紫薯','玉米','鸡蛋','豆腐','低脂','少油'];
+
+function isLightRecipe(recipe) {
+    const text = (recipe.name + ' ' + recipe.steps).toLowerCase();
+    return LIGHT_KEYWORDS.some(k => text.includes(k));
+}
+
+function renderLightMatch() {
+    const fridgeNames = fridgeItems.map(f => f.name);
+    const lightRecipes = recipes.filter(isLightRecipe);
+    const scored = lightRecipes.map(r => {
+        const text = r.name + ' ' + r.steps;
+        const hit = fridgeNames.filter(n => text.includes(n)).length;
+        return { recipe: r, hit };
+    }).sort((a, b) => b.hit - a.hit);
+
+    if (scored.length === 0) {
+        lightList.innerHTML = '<div style="text-align:center;color:#b8a18c;font-size:13px;padding:20px 0;">还没有轻食类菜谱，先添加几道吧～</div>';
+        return;
+    }
+    lightList.innerHTML = scored.slice(0, 8).map(({ recipe, hit }) => `
+        <div class="light-card">
+            <div class="light-name">${guessDishEmoji(recipe.name)} ${escapeHtml(recipe.name)}</div>
+            <div class="light-hit">${hit > 0 ? `✅ 冰箱可匹配 ${hit} 种食材` : '🧊 冰箱暂无匹配食材'}</div>
+        </div>
+    `).join('');
+}
+
+// ============================================
+// 运动打卡
+// ============================================
+function addExercise() {
+    const type = exType.value.trim();
+    const d = parseInt(exDuration.value, 10);
+    if (!type) { showToast('请填写运动类型', 1200); exType.focus(); return; }
+    if (!d || d <= 0) { showToast('请填写运动时长（分钟）', 1200); exDuration.focus(); return; }
+    exerciseRecords.push({
+        id: Date.now() + Math.random(),
+        date: todayStr(),
+        type, duration: d
+    });
+    persistExercise();
+    exType.value = '';
+    exDuration.value = '';
+    renderExercise();
+    showToast(`✅ 已打卡 ${type} ${d} 分钟`, 1500);
+}
+
+function renderExercise() {
+    // 统计：最近 7 天
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date(); d.setDate(d.getDate() - i);
+        const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const min = exerciseRecords.filter(e => e.date === ds).reduce((s, e) => s + e.duration, 0);
+        days.push({ date: ds, min });
+    }
+    const todayMin = days[days.length - 1].min;
+    const maxMin = Math.max(...days.map(d => d.min), 1);
+
+    exStats.innerHTML = `
+        <div class="exercise-today">今日运动：<strong>${todayMin}</strong> 分钟</div>
+        <div class="exercise-bars">
+            ${days.map(d => `
+                <div class="ex-bar-wrap">
+                    <div class="ex-bar" style="height:${(d.min / maxMin) * 100}%"></div>
+                    <div class="ex-label">${d.date.slice(5)}</div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    // 列表
+    const list = exerciseRecords.slice().reverse();
+    if (list.length === 0) {
+        exList.innerHTML = '<div style="text-align:center;color:#b8a18c;font-size:13px;padding:10px 0;">还没有运动记录</div>';
+    } else {
+        exList.innerHTML = list.map(e => `
+            <div class="exercise-item">
+                <span>${e.date} · ${escapeHtml(e.type)} · <strong>${e.duration} 分钟</strong></span>
+                <button class="ex-del" data-id="${e.id}" title="删除">🗑️</button>
+            </div>
+        `).join('');
+        exList.querySelectorAll('.ex-del').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = Number(btn.getAttribute('data-id'));
+                exerciseRecords = exerciseRecords.filter(r => r.id !== id);
+                persistExercise();
+                renderExercise();
+                showToast('已删除', 1000);
+            });
+        });
+    }
+}
+
+// ============================================
+// 摇一摇
+// ============================================
+function randomPickRecipe() {
+    const visible = getVisibleRecipes();
+    const pool = visible.length ? visible : recipes;
+    if (pool.length === 0) { showToast('没有可选的菜谱', 1500); return; }
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    shakeResult.textContent = `${guessDishEmoji(pick.name)} ${pick.name}\n\n${(pick.steps || '').slice(0, 80)}...`;
+    shakeOverlay.classList.add('show');
+}
+
+// ============================================
 // 分享
 // ============================================
 async function generateShareLink(mode, withImages) {
@@ -876,15 +1312,15 @@ function enterGuestMode(shareDataStr) {
         showToast('分享链接无效或已损坏', 2500);
         isGuestMode = false;
         fabBtn.classList.remove('hidden');
-        ownerView.classList.remove('hidden');
-        guestView.classList.add('hidden');
+        document.getElementById('ownerView').classList.remove('hidden');
+        document.getElementById('guestView').classList.add('hidden');
         guestCartBar.classList.add('hidden');
         return;
     }
 
     fabBtn.classList.add('hidden');
-    ownerView.classList.add('hidden');
-    guestView.classList.remove('hidden');
+    document.getElementById('ownerView').classList.add('hidden');
+    document.getElementById('guestView').classList.remove('hidden');
     guestCartBar.classList.remove('hidden');
     guestTitle.textContent = '🍽️ 有人喊你点菜啦';
     guestDesc.textContent = `共 ${list.length} 道菜，勾选想吃的，生成清单发回给TA`;
@@ -893,7 +1329,7 @@ function enterGuestMode(shareDataStr) {
     list.forEach(recipe => {
         const imageHtml = recipe.image
             ? `<img src="${recipe.image}" alt="${escapeHtml(recipe.name)}" loading="lazy">`
-            : `<span>🍽️</span>`;
+            : `<span>${guessDishEmoji(recipe.name)}</span>`;
         const catInfo = getCategoryInfo(recipe.category);
         html += `
             <div class="guest-recipe-item" data-id="${recipe.id}">
@@ -1041,7 +1477,7 @@ function renderRecipeList() {
     pageItems.forEach(recipe => {
         const imageHtml = recipe.image
             ? `<img src="${recipe.image}" alt="${escapeHtml(recipe.name)}" loading="lazy">`
-            : `<span>🍽️</span>`;
+            : `<span class="dish-emoji">${guessDishEmoji(recipe.name)}</span>`;
         const catInfo = getCategoryInfo(recipe.category || 'other');
         const catTag = `<span class="category-tag ${catInfo.cls}" data-cat-id="${recipe.id}" title="点击修改分类">${catInfo.icon} ${catInfo.name}</span>`;
         const isSelected = selectedIds.has(recipe.id);
@@ -1050,6 +1486,7 @@ function renderRecipeList() {
             : '';
         const actionButtons = manageMode ? '' : `
             <div class="action-buttons">
+                <button class="cook-btn" data-id="${recipe.id}" title="记录今天做了">🍳</button>
                 <button class="edit-btn" data-id="${recipe.id}" title="编辑">✏️</button>
                 <button class="delete-btn" data-id="${recipe.id}" title="删除">🗑️</button>
             </div>`;
@@ -1095,6 +1532,14 @@ function renderRecipeList() {
         });
     }
 
+    document.querySelectorAll('.cook-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = Number(btn.getAttribute('data-id'));
+            const recipe = recipes.find(r => r.id === id);
+            if (recipe) markCookedToday(recipe);
+        });
+    });
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1137,7 +1582,7 @@ function renderAll() {
 }
 
 // ============================================
-// 冰箱渲染
+// 冰箱渲染（含保质期）
 // ============================================
 function guessEmoji(name) {
     const n = name;
@@ -1153,30 +1598,68 @@ function guessEmoji(name) {
     return '🧊';
 }
 
+function getExpireStatus(item) {
+    if (!item.expireDate) return { level: 'none', text: '' };
+    const today = new Date(); today.setHours(0,0,0,0);
+    const exp = new Date(item.expireDate + 'T00:00:00');
+    const diff = Math.round((exp - today) / 86400000);
+    if (diff < 0)  return { level: 'expired', text: `已过期 ${-diff} 天` };
+    if (diff === 0) return { level: 'today',   text: '今天到期' };
+    if (diff <= 3)  return { level: 'soon',    text: `${diff} 天后过期` };
+    return { level: 'fresh', text: `${diff} 天后过期` };
+}
+
 function renderFridge() {
     const count = fridgeItems.length;
     fridgeCount.textContent = `共 ${count} 种食材`;
+
+    const expired = fridgeItems.filter(f => getExpireStatus(f).level === 'expired');
+    const soon = fridgeItems.filter(f => ['today','soon'].includes(getExpireStatus(f).level));
+    let alertHtml = '';
+    if (expired.length) alertHtml += `<div class="fridge-alert expired">⚠️ ${expired.length} 种食材已过期，建议尽快清理</div>`;
+    if (soon.length)   alertHtml += `<div class="fridge-alert soon">⏰ ${soon.length} 种食材即将过期</div>`;
+
     if (count === 0) {
-        fridgeList.innerHTML = `
+        fridgeList.innerHTML = alertHtml + `
             <div class="fridge-empty">
                 🧊 冰箱空空如也<br>
                 手动输入或拍照识别添加食材吧～
-            </div>
-        `;
+            </div>`;
         return;
     }
 
-    let html = '';
-    fridgeItems.forEach(item => {
+    const sorted = [...fridgeItems].sort((a, b) => {
+        const order = { expired: 0, today: 1, soon: 2, fresh: 3, none: 4 };
+        return order[getExpireStatus(a).level] - order[getExpireStatus(b).level];
+    });
+
+    let html = alertHtml;
+    sorted.forEach(item => {
+        const st = getExpireStatus(item);
+        const expireHtml = item.expireDate
+            ? `<span class="fridge-expire ${st.level}">${st.text}</span>`
+            : `<span class="fridge-expire none">未设保质期</span>`;
         html += `
-            <div class="fridge-item" data-id="${item.id}">
+            <div class="fridge-item ${st.level}" data-id="${item.id}">
                 <span class="fridge-emoji">${guessEmoji(item.name)}</span>
-                <span class="fridge-name">${escapeHtml(item.name)}</span>
+                <div class="fridge-main">
+                    <span class="fridge-name">${escapeHtml(item.name)}</span>
+                    ${expireHtml}
+                </div>
+                <button class="fridge-edit" data-id="${item.id}" title="编辑">✏️</button>
                 <button class="fridge-del" data-id="${item.id}" title="删除">🗑️</button>
-            </div>
-        `;
+            </div>`;
     });
     fridgeList.innerHTML = html;
+
+    fridgeList.querySelectorAll('.fridge-edit').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = Number(btn.getAttribute('data-id'));
+            const item = fridgeItems.find(f => f.id === id);
+            if (item) openFridgeEdit(item);
+        });
+    });
 
     fridgeList.querySelectorAll('.fridge-del').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -1184,22 +1667,63 @@ function renderFridge() {
             const id = Number(btn.getAttribute('data-id'));
             const item = fridgeItems.find(f => f.id === id);
             if (!item) return;
-            fridgeItems = fridgeItems.filter(f => f.id !== id);
-            persistFridge();
-            renderFridge();
-            showToast(`已移除「${item.name}」`, 1200);
+            showConfirm({
+                icon: '🗑️', title: '移除食材',
+                message: `确定要从冰箱移除「${item.name}」吗？`,
+                okText: '移除', okColor: '#c0392b',
+                onOk: () => {
+                    fridgeItems = fridgeItems.filter(f => f.id !== id);
+                    persistFridge();
+                    renderFridge();
+                    showToast(`已移除「${item.name}」`, 1200);
+                }
+            });
         });
     });
 }
 
-function addFridgeItem(name) {
+function openFridgeEdit(item) {
+    fridgeEditingId = item.id;
+    fridgeEditName.value = item.name;
+    fridgeEditDate.value = item.expireDate || '';
+    fridgeEditOverlay.classList.add('show');
+}
+
+function closeFridgeEdit() {
+    fridgeEditOverlay.classList.remove('show');
+    fridgeEditingId = null;
+}
+
+fridgeEditCancel.addEventListener('click', closeFridgeEdit);
+fridgeEditOverlay.addEventListener('click', (e) => { if (e.target === fridgeEditOverlay) closeFridgeEdit(); });
+fridgeEditSave.addEventListener('click', () => {
+    if (!fridgeEditingId) return;
+    const name = fridgeEditName.value.trim();
+    if (!name) { showToast('名称不能为空', 1200); return; }
+    const date = fridgeEditDate.value || null;
+    const idx = fridgeItems.findIndex(f => f.id === fridgeEditingId);
+    if (idx !== -1) {
+        fridgeItems[idx] = { ...fridgeItems[idx], name, expireDate: date };
+        persistFridge();
+        renderFridge();
+        showToast('✅ 已更新', 1200);
+    }
+    closeFridgeEdit();
+});
+
+function addFridgeItem(name, expireDate) {
     const trimmed = (name || '').trim();
     if (!trimmed) return false;
     if (fridgeItems.some(f => f.name === trimmed)) {
         showToast(`「${trimmed}」已经在冰箱里了`, 1500);
         return false;
     }
-    fridgeItems.push({ id: Date.now() + Math.random(), name: trimmed });
+    fridgeItems.push({
+        id: Date.now() + Math.random(),
+        name: trimmed,
+        expireDate: expireDate || null,
+        addedAt: todayStr()
+    });
     persistFridge();
     renderFridge();
     return true;
@@ -1210,7 +1734,15 @@ fridgeAddBtn.addEventListener('click', () => {
     if (!val.trim()) { showToast('请输入食材名称', 1200); fridgeInput.focus(); return; }
     const parts = val.replace(/[，、；;]/g, ',').split(',').map(s => s.trim()).filter(s => s.length > 0);
     let added = 0;
-    parts.forEach(p => { if (addFridgeItem(p)) added++; });
+    parts.forEach(p => {
+        let name = p, expireDate = null;
+        if (p.includes('|')) {
+            const [n, d] = p.split('|').map(s => s.trim());
+            name = n;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(d)) expireDate = d;
+        }
+        if (addFridgeItem(name, expireDate)) added++;
+    });
     if (added > 0) {
         fridgeInput.value = '';
         showToast(`已添加 ${added} 种食材`, 1500);
@@ -1272,10 +1804,14 @@ function exportBackup() {
         return;
     }
     const backup = {
-        version: 1,
+        version: 2,
         exportAt: new Date().toISOString(),
         recipes: recipes,
-        fridgeItems: fridgeItems
+        fridgeItems: fridgeItems,
+        cookCalendar: cookCalendar,
+        userProfile: userProfile,
+        weightRecords: weightRecords,
+        exerciseRecords: exerciseRecords
     };
     const json = JSON.stringify(backup, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
@@ -1323,11 +1859,23 @@ function importBackup(file) {
                     if (importedFridge.length > 0) {
                         fridgeItems = importedFridge.map(item => ({
                             id: item.id || Date.now() + Math.random(),
-                            name: item.name || ''
+                            name: item.name || '',
+                            expireDate: item.expireDate || null,
+                            addedAt: item.addedAt || todayStr()
                         })).filter(item => item.name.trim());
                     }
+                    // 新数据
+                    if (Array.isArray(data.cookCalendar)) cookCalendar = data.cookCalendar;
+                    if (data.userProfile) userProfile = data.userProfile;
+                    if (Array.isArray(data.weightRecords)) weightRecords = data.weightRecords;
+                    if (Array.isArray(data.exerciseRecords)) exerciseRecords = data.exerciseRecords;
+
                     persistRecipes();
                     persistFridge();
+                    persistCalendar();
+                    persistProfile();
+                    persistWeight();
+                    persistExercise();
                     currentPage = 1;
                     renderAll();
                     renderFridge();
@@ -1426,6 +1974,84 @@ importFileInput.addEventListener('change', (e) => {
     importFileInput.value = '';
 });
 
+// ===== 新功能事件绑定 =====
+calendarBtn.addEventListener('click', () => {
+    calendarYear = new Date().getFullYear();
+    calendarMonth = new Date().getMonth();
+    renderCalendar();
+    calendarOverlay.classList.add('show');
+});
+calendarCloseBtn.addEventListener('click', () => calendarOverlay.classList.remove('show'));
+calendarOverlay.addEventListener('click', (e) => { if (e.target === calendarOverlay) calendarOverlay.classList.remove('show'); });
+calPrevBtn.addEventListener('click', () => {
+    calendarMonth--;
+    if (calendarMonth < 0) { calendarMonth = 11; calendarYear--; }
+    renderCalendar();
+});
+calNextBtn.addEventListener('click', () => {
+    calendarMonth++;
+    if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; }
+    renderCalendar();
+});
+calTodayBtn.addEventListener('click', () => {
+    calendarYear = new Date().getFullYear();
+    calendarMonth = new Date().getMonth();
+    renderCalendar();
+});
+calPlanBtn.addEventListener('click', () => openPlanDialog(todayStr()));
+
+profileBtn.addEventListener('click', () => {
+    renderProfile();
+    profileOverlay.classList.add('show');
+});
+profileCloseBtn.addEventListener('click', () => profileOverlay.classList.remove('show'));
+profileOverlay.addEventListener('click', (e) => { if (e.target === profileOverlay) profileOverlay.classList.remove('show'); });
+avatarPickBtn.addEventListener('click', () => avatarInput.click());
+avatarInput.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+        const compressed = await compressImage(ev.target.result, 200, 0.7);
+        userProfile.avatar = compressed;
+        persistProfile();
+        renderProfile();
+        showToast('✅ 头像已更新', 1500);
+    };
+    reader.readAsDataURL(file);
+    avatarInput.value = '';
+});
+profileSaveBtn.addEventListener('click', () => {
+    userProfile.nickname = nicknameInput.value.trim();
+    const h = parseFloat(heightInput.value);
+    if (h && h >= 50 && h <= 250) userProfile.height = h;
+    persistProfile();
+    renderProfile();
+    showToast('✅ 资料已保存', 1500);
+});
+weightAddBtn.addEventListener('click', addWeightRecord);
+weightDate.value = todayStr();
+
+lightBtn.addEventListener('click', () => {
+    renderLightMatch();
+    lightOverlay.classList.add('show');
+});
+lightCloseBtn.addEventListener('click', () => lightOverlay.classList.remove('show'));
+lightOverlay.addEventListener('click', (e) => { if (e.target === lightOverlay) lightOverlay.classList.remove('show'); });
+
+exerciseBtn.addEventListener('click', () => {
+    renderExercise();
+    exerciseOverlay.classList.add('show');
+});
+exerciseCloseBtn.addEventListener('click', () => exerciseOverlay.classList.remove('show'));
+exerciseOverlay.addEventListener('click', (e) => { if (e.target === exerciseOverlay) exerciseOverlay.classList.remove('show'); });
+exAddBtn.addEventListener('click', addExercise);
+
+shakeBtn.addEventListener('click', randomPickRecipe);
+shakeCloseBtn.addEventListener('click', () => shakeOverlay.classList.remove('show'));
+shakeAgainBtn.addEventListener('click', randomPickRecipe);
+shakeOverlay.addEventListener('click', (e) => { if (e.target === shakeOverlay) shakeOverlay.classList.remove('show'); });
+
 // ============================================
 // 初始化
 // ============================================
@@ -1446,6 +2072,9 @@ function init() {
 
     loadRecipes();
     loadFridge();
+    loadCalendar();
+    loadProfile();
+    loadExercise();
     renderAll();
     renderFridge();
 }
