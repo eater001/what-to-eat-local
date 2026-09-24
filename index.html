@@ -1,479 +1,664 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>今天吃啥</title>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
-        body { background: #f7f3ed; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 16px 14px 100px; }
-        .app-container { max-width: 600px; width: 100%; }
-        .app-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; padding: 0 4px; gap: 10px; }
-        .app-header h1 { font-size: 26px; font-weight: 700; color: #3e2c1b; display: flex; align-items: center; gap: 8px; }
-        .app-header h1 .emoji { font-size: 28px; }
-        .header-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
-        .header-fridge-btn { background: #e8f5e5; color: #3e7d34; border: 1px solid #c6e3be; border-radius: 40px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-        .header-add-btn { background: #3f2e1e; color: #f5ede4; border: none; border-radius: 40px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-        .subhead { font-size: 14px; color: #8b7356; margin-bottom: 20px; border-left: 4px solid #d9b382; padding: 8px 14px; background: #fefcf9; border-radius: 0 12px 12px 0; line-height: 1.4; }
-        .recipes-header { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 0 12px; padding: 0 4px; }
-        .recipes-header h2 { font-size: 20px; font-weight: 600; color: #3e2c1b; }
-        .recipes-header .count-badge { background: #e5d6c6; border-radius: 40px; padding: 6px 14px; font-size: 13px; font-weight: 500; color: #4a3726; }
-        .category-bar { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 12px; margin-bottom: 4px; scrollbar-width: none; }
-        .category-bar::-webkit-scrollbar { display: none; }
-        .category-chip { flex-shrink: 0; background: #ffffff; border: 1.5px solid #e5d6c6; border-radius: 40px; padding: 8px 16px; font-size: 13px; font-weight: 500; color: #6b5846; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-        .category-chip.active { background: #3f2e1e; border-color: #3f2e1e; color: #f5ede4; }
-        .category-chip .chip-count { background: rgba(0, 0, 0, 0.08); border-radius: 20px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
-        .category-chip.active .chip-count { background: rgba(255, 255, 255, 0.2); }
-        .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fdfaf7; border: 1px solid #efe2d6; border-radius: 20px; padding: 10px 14px; margin-bottom: 16px; flex-wrap: wrap; }
-        .manage-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #5c4a35; cursor: pointer; user-select: none; }
-        .manage-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: #3f2e1e; cursor: pointer; }
-        .toolbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .batch-del-btn { background: #fdeceb; color: #c0392b; border: 1px solid #f5c6c2; border-radius: 40px; padding: 8px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
-        .batch-del-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .select-all-btn { background: #eef3f9; color: #5a7a9a; border: 1px solid #cfe0f0; border-radius: 40px; padding: 8px 14px; font-size: 13px; font-weight: 500; cursor: pointer; }
-        .share-btn { background: #fff3e0; color: #b06a1e; border: 1px solid #f0d9b5; border-radius: 40px; padding: 8px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
-        .backup-btn { background: #eef3f9; color: #3d6a9e; border: 1px solid #cfe0f0; border-radius: 40px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
-        .empty-message { background: #fdfaf7; border-radius: 24px; padding: 50px 20px; text-align: center; color: #b7a18c; font-size: 16px; border: 1px dashed #dccfc2; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-        .empty-message span { font-size: 52px; }
-        .empty-message .empty-sub { font-size: 13px; color: #c4b3a2; }
-        .recipe-item { background: #ffffff; border-radius: 24px; padding: 16px 18px 18px; margin-bottom: 16px; box-shadow: 0 8px 18px -8px rgba(70, 50, 30, 0.12); border: 1px solid #f1e5da; display: flex; gap: 16px; }
-        .recipe-item.selected { border-color: #f0b8b3; background: #fffafa; }
-        .select-checkbox { display: flex; align-items: flex-start; padding-top: 4px; }
-        .select-checkbox input { width: 20px; height: 20px; accent-color: #c0392b; cursor: pointer; }
-        .recipe-thumb { width: 95px; height: 95px; border-radius: 20px; background: #f5ede5; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; color: #d4c0ad; font-size: 32px; border: 1px solid #efe2d6; }
-        .recipe-thumb img { width: 100%; height: 100%; object-fit: cover; }
-        .recipe-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-        .recipe-name { font-size: 18px; font-weight: 600; color: #2b1f14; margin-bottom: 6px; word-break: break-word; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-        .category-tag { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 40px; background: #f0e9e0; color: #7d633d; border: 1px solid #e2d4c4; white-space: nowrap; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
-        .category-tag::after { content: '✎'; font-size: 9px; opacity: 0.55; margin-left: 1px; }
-        .category-tag.cat-meat { background: #fde8e3; color: #b54a32; border-color: #f5c6bb; }
-        .category-tag.cat-veg { background: #e8f5e5; color: #3e7d34; border-color: #c6e3be; }
-        .category-tag.cat-soup { background: #e5f0fa; color: #2e6a9e; border-color: #bfdcf2; }
-        .category-tag.cat-staple { background: #faf0dc; color: #9e7226; border-color: #edd9b0; }
-        .category-tag.cat-cold { background: #e9f7f5; color: #2e8b7a; border-color: #bce4dd; }
-        .category-tag.cat-dessert { background: #fbe8f2; color: #b03d7d; border-color: #f2c6df; }
-        .category-tag.cat-other { background: #eeeaf5; color: #6b5a9e; border-color: #d8cef0; }
-        .recipe-name .action-buttons { margin-left: auto; display: flex; gap: 6px; }
-        .recipe-name .edit-btn, .recipe-name .delete-btn { background: none; border: none; font-size: 18px; cursor: pointer; padding: 6px 4px; color: #b8a18c; border-radius: 8px; }
-        .recipe-steps { font-size: 14px; color: #6b5846; line-height: 1.45; background: #faf5f0; padding: 10px 12px; border-radius: 16px; margin-top: 4px; word-break: break-word; white-space: pre-wrap; max-height: 100px; overflow-y: auto; border: 1px solid #f0e4d9; }
-       .pagination {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    margin: 24px 0 16px;
-}
-.page-btn {
-    background: #3f2e1e;
-    color: #f5ede4;
-    border: none;
-    border-radius: 40px;
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-}
-.page-btn:disabled {
-    background: #d9cfc4;
-    color: #a89b8c;
-    cursor: not-allowed;
-}
-.page-info {
-    font-size: 14px;
-    color: #6b5846;
-    font-weight: 500;
-}
-        .fab { position: fixed; bottom: 26px; right: 26px; width: 60px; height: 60px; border-radius: 50%; background: #3f2e1e; color: #f5ede4; border: none; font-size: 30px; line-height: 1; cursor: pointer; box-shadow: 0 10px 24px -6px rgba(60, 40, 20, 0.5); display: flex; align-items: center; justify-content: center; z-index: 500; }
-        .overlay { position: fixed; inset: 0; background: rgba(30, 20, 10, 0.5); z-index: 1000; display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.22s; }
-        .overlay.show { opacity: 1; pointer-events: auto; }
-        .sheet { background: #ffffff; border-radius: 28px 28px 0 0; width: 100%; max-width: 600px; max-height: 92vh; overflow-y: auto; padding: 24px 20px 28px; box-shadow: 0 -12px 30px -8px rgba(60, 40, 20, 0.25); transform: translateY(30px); transition: transform 0.25s; }
-        .overlay.show .sheet { transform: translateY(0); }
-        .sheet-handle { width: 42px; height: 5px; border-radius: 10px; background: #e2d4c4; margin: 0 auto 18px; }
-        .sheet-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #4a3723; font-size: 19px; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 2px dashed #e7d8c8; }
-        .edit-banner { background: #fff6e5; border-radius: 40px; padding: 10px 18px; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; border: 1px solid #ecdbba; font-size: 14px; color: #7d633d; font-weight: 500; }
-        .edit-banner .cancel-edit { background: none; border: 1px solid #cdb79b; border-radius: 40px; padding: 6px 14px; color: #7d633d; font-size: 13px; font-weight: 500; cursor: pointer; }
-        .hidden { display: none !important; }
-        .fridge-intro { background: #e8f5e5; border: 1px solid #c6e3be; border-radius: 18px; padding: 14px 16px; margin-bottom: 18px; font-size: 13px; color: #3e7d34; line-height: 1.5; }
-        .fridge-add-row { display: flex; gap: 8px; margin-bottom: 12px; }
-        .fridge-add-input { flex: 1; padding: 14px 16px; font-size: 15px; background: #fcf9f6; border: 1.5px solid #eadbcd; border-radius: 18px; outline: none; }
-        .fridge-add-btn { background: #3e7d34; color: #fff; border: none; border-radius: 40px; padding: 14px 20px; font-size: 15px; font-weight: 600; cursor: pointer; }
-        .fridge-ocr-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-        .fridge-ocr-btn { flex: 1; background: #eef3f9; color: #3d6a9e; border: 1.5px solid #cfe0f0; border-radius: 40px; padding: 12px 16px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 140px; }
-        .fridge-ocr-preview { position: relative; margin-bottom: 14px; border-radius: 14px; overflow: hidden; border: 1px solid #cfe0f0; background: #f5faff; }
-        .fridge-ocr-preview img { width: 100%; display: block; max-height: 180px; object-fit: contain; }
-        .ocr-remove { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%; background: rgba(60, 40, 20, 0.7); color: #fff; border: none; font-size: 16px; cursor: pointer; }
-        .fridge-ocr-progress { margin-bottom: 14px; background: #f5faff; border-radius: 12px; padding: 12px; border: 1px solid #cfe0f0; }
-        .fridge-ocr-progress-bar { height: 8px; background: #dbe8f3; border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
-        .fridge-ocr-progress-fill { height: 100%; background: linear-gradient(90deg, #5b9bd5, #3d6a9e); width: 0%; transition: width 0.2s; border-radius: 10px; }
-        .fridge-ocr-status { font-size: 12px; color: #5a7a9a; text-align: center; font-weight: 500; }
-        .fridge-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fdfaf7; border: 1px solid #efe2d6; border-radius: 16px; padding: 10px 14px; margin-bottom: 14px; flex-wrap: wrap; }
-        .fridge-count { font-size: 14px; font-weight: 600; color: #3e7d34; }
-        .fridge-clear-btn { background: #fdeceb; color: #c0392b; border: 1px solid #f5c6c2; border-radius: 40px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
-        .fridge-list { display: flex; flex-direction: column; gap: 10px; }
-        .fridge-item { display: flex; align-items: center; gap: 10px; background: #ffffff; border: 1px solid #eef2ea; border-radius: 18px; padding: 14px 16px; }
-        .fridge-emoji { font-size: 22px; flex-shrink: 0; }
-        .fridge-name { flex: 1; font-size: 15px; font-weight: 500; color: #2b3a26; word-break: break-word; }
-        .fridge-del { background: none; border: none; font-size: 18px; cursor: pointer; color: #c2ab97; padding: 4px 6px; }
-        .fridge-empty { text-align: center; color: #b7c4b0; font-size: 14px; padding: 30px 20px; border: 1px dashed #d6e3d0; border-radius: 18px; background: #fafdf9; }
-        .smart-zone { background: #f0f7ff; border: 1.5px dashed #a8c8e8; border-radius: 20px; padding: 14px; margin-bottom: 20px; }
-        .smart-tabs { display: flex; gap: 6px; background: #e3eef9; border-radius: 40px; padding: 4px; margin-bottom: 12px; }
-        .smart-tab { flex: 1; background: none; border: none; border-radius: 40px; padding: 9px 12px; font-size: 13px; font-weight: 600; color: #5a7a9a; cursor: pointer; }
-        .smart-tab.active { background: #ffffff; color: #2e5580; box-shadow: 0 2px 6px -2px rgba(50, 90, 140, 0.3); }
-        .smart-panel { display: none; }
-        .smart-panel.active { display: block; }
-        .paste-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 6px; }
-        .paste-header .label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #3d6a9e; }
-        .paste-header .hint { font-size: 11px; color: #7b9cc0; }
-        .paste-input { width: 100%; min-height: 90px; padding: 12px 14px; font-size: 14px; line-height: 1.5; background: #ffffff; border: 1.5px solid #cfe0f0; border-radius: 14px; outline: none; resize: vertical; }
-        .paste-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-        .extract-btn { background: #3d6a9e; color: white; border: none; border-radius: 40px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; flex: 1; min-width: 150px; }
-        .clear-paste-btn { background: #eef3f9; color: #5a7a9a; border: 1px solid #cfe0f0; border-radius: 40px; padding: 10px 16px; font-size: 14px; font-weight: 500; cursor: pointer; }
-        .ocr-drop { background: #ffffff; border: 2px dashed #cfe0f0; border-radius: 16px; padding: 20px 14px; text-align: center; cursor: pointer; }
-        .ocr-drop .ocr-icon { font-size: 38px; margin-bottom: 8px; }
-        .ocr-drop .ocr-text { font-size: 14px; font-weight: 600; color: #3d6a9e; margin-bottom: 4px; }
-        .ocr-drop .ocr-hint { font-size: 12px; color: #8ba9c4; }
-        .ocr-preview { position: relative; margin-top: 12px; border-radius: 14px; overflow: hidden; border: 1px solid #cfe0f0; background: #f5faff; }
-        .ocr-preview img { width: 100%; display: block; max-height: 220px; object-fit: contain; }
-        .ocr-progress { margin-top: 12px; background: #f5faff; border-radius: 12px; padding: 12px; border: 1px solid #cfe0f0; }
-        .ocr-progress-bar { height: 8px; background: #dbe8f3; border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
-        .ocr-progress-fill { height: 100%; background: linear-gradient(90deg, #5b9bd5, #3d6a9e); width: 0%; transition: width 0.2s; border-radius: 10px; }
-        .ocr-status { font-size: 12px; color: #5a7a9a; text-align: center; font-weight: 500; }
-        .ocr-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-        .ocr-run-btn { background: #3d6a9e; color: white; border: none; border-radius: 40px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; flex: 1; min-width: 150px; }
-        .ocr-run-btn:disabled { background: #b8c9db; cursor: not-allowed; }
-        .img-upload-area { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-        .preview-container { width: 100%; aspect-ratio: 16 / 10; background: #faf6f1; border-radius: 20px; border: 2px dashed #d9c6b0; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; position: relative; }
-        .preview-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .placeholder-icon { font-size: 40px; color: #c8b09b; margin-bottom: 6px; }
-        .placeholder-text { color: #b8a18c; font-size: 14px; font-weight: 500; }
-        .upload-btn { background: #f1e7dd; border: none; border-radius: 40px; padding: 10px 20px; font-size: 14px; font-weight: 500; color: #4e3a28; display: flex; align-items: center; gap: 6px; cursor: pointer; border: 1px solid #e2d2c0; }
-        .upload-btn input[type="file"] { display: none; }
-        .field { margin-bottom: 18px; }
-        .field label { font-size: 14px; font-weight: 500; color: #5c4a35; display: block; margin-bottom: 7px; }
-        .field input, .field textarea { width: 100%; padding: 14px 16px; font-size: 15px; background: #fcf9f6; border: 1.5px solid #eadbcd; border-radius: 18px; outline: none; resize: vertical; }
-        .field textarea { min-height: 120px; line-height: 1.5; }
-        .save-btn { background: #3f2e1e; color: white; border: none; border-radius: 40px; padding: 17px 24px; font-size: 17px; font-weight: 600; width: 100%; cursor: pointer; margin-top: 8px; }
-        .save-btn.update-mode { background: #2e6b4a; }
-        .sheet-close-btn { background: none; border: 1px solid #e2d4c4; border-radius: 40px; padding: 10px 18px; font-size: 14px; color: #7d633d; cursor: pointer; margin-top: 10px; width: 100%; font-weight: 500; }
-        .category-picker-overlay { position: fixed; inset: 0; background: rgba(30, 20, 10, 0.45); z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
-        .category-picker-overlay.show { opacity: 1; pointer-events: auto; }
-        .category-picker { background: #ffffff; border-radius: 28px; width: 100%; max-width: 420px; padding: 24px 20px 20px; }
-        .picker-title { font-size: 18px; font-weight: 600; color: #3e2c1b; margin-bottom: 6px; }
-        .picker-subtitle { font-size: 13px; color: #9c8870; margin-bottom: 18px; }
-        .picker-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 18px; }
-        .picker-option { display: flex; align-items: center; gap: 8px; padding: 14px; border-radius: 18px; border: 1.5px solid #eee2d6; background: #fdfaf7; cursor: pointer; font-size: 15px; font-weight: 500; color: #4a3726; }
-        .picker-option.current { border-color: #3f2e1e; background: #f5ede4; }
-        .picker-option .opt-icon { font-size: 20px; }
-        .picker-option .opt-check { margin-left: auto; font-size: 14px; color: #3f2e1e; font-weight: 700; }
-        .picker-actions { display: flex; gap: 10px; }
-        .picker-cancel { flex: 1; padding: 14px; border-radius: 40px; border: 1px solid #e2d4c4; background: #faf6f1; color: #7d633d; font-size: 15px; font-weight: 500; cursor: pointer; }
-        .share-panel { background: #ffffff; border-radius: 28px; width: 100%; max-width: 440px; padding: 26px 22px 22px; max-height: 90vh; overflow-y: auto; }
-        .share-title { font-size: 20px; font-weight: 600; color: #3e2c1b; margin-bottom: 6px; }
-        .share-desc { font-size: 13px; color: #9c8870; margin-bottom: 18px; line-height: 1.5; }
-        .share-checkbox-row { display: flex; align-items: center; gap: 10px; background: #f5faff; border: 1.5px solid #cfe0f0; border-radius: 16px; padding: 12px 14px; margin-bottom: 14px; cursor: pointer; }
-        .share-checkbox-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: #3d6a9e; cursor: pointer; flex-shrink: 0; }
-        .share-checkbox-row .cb-text { flex: 1; font-size: 13px; color: #3d6a9e; line-height: 1.4; }
-        .share-checkbox-row .cb-text strong { display: block; font-size: 14px; font-weight: 600; color: #2e5580; margin-bottom: 2px; }
-        .share-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
-        .share-option { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 18px; border: 1.5px solid #eee2d6; background: #fdfaf7; cursor: pointer; text-align: left; }
-        .share-option .opt-icon { font-size: 26px; flex-shrink: 0; }
-        .share-option .opt-text { flex: 1; min-width: 0; }
-        .share-option .opt-text .opt-name { font-size: 15px; font-weight: 600; color: #3e2c1b; margin-bottom: 2px; }
-        .share-option .opt-text .opt-desc { font-size: 12px; color: #9c8870; line-height: 1.4; }
-        .share-link-box { background: #f5f0e9; border: 1px solid #e2d4c4; border-radius: 16px; padding: 12px 14px; font-size: 12px; color: #6b5846; word-break: break-all; margin-bottom: 14px; max-height: 120px; overflow-y: auto; line-height: 1.5; font-family: monospace; }
-        .share-link-info { background: #fff6e5; border: 1px solid #ecdbba; border-radius: 14px; padding: 10px 14px; font-size: 12px; color: #7d633d; margin-bottom: 14px; line-height: 1.5; }
-        .share-link-info.warning { background: #fdeceb; border-color: #f5c6c2; color: #a93226; }
-        .share-actions { display: flex; gap: 10px; }
-        .share-cancel { flex: 1; padding: 14px; border-radius: 40px; border: 1px solid #e2d4c4; background: #faf6f1; color: #7d633d; font-size: 15px; font-weight: 500; cursor: pointer; }
-        .share-confirm { flex: 1; padding: 14px; border-radius: 40px; border: none; background: #3f2e1e; color: #f5ede4; font-size: 15px; font-weight: 600; cursor: pointer; }
-        .guest-banner { background: linear-gradient(135deg, #fff6e5 0%, #fef0d9 100%); border: 1.5px solid #f0d9b5; border-radius: 24px; padding: 20px; margin-bottom: 22px; text-align: center; }
-        .guest-banner .guest-icon { font-size: 42px; margin-bottom: 8px; }
-        .guest-banner .guest-title { font-size: 19px; font-weight: 700; color: #8b5a1e; margin-bottom: 6px; }
-        .guest-banner .guest-desc { font-size: 14px; color: #a07a3e; line-height: 1.5; }
-        .guest-cart-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #ffffff; border-top: 1px solid #eadbcd; padding: 14px 18px; z-index: 900; display: flex; align-items: center; gap: 12px; max-width: 600px; margin: 0 auto; }
-        .guest-cart-bar .cart-info { flex: 1; font-size: 14px; color: #5c4a35; font-weight: 500; }
-        .guest-cart-bar .cart-info .cart-count { color: #b06a1e; font-weight: 700; font-size: 16px; }
-        .guest-cart-bar .cart-submit { background: #b06a1e; color: #fff; border: none; border-radius: 40px; padding: 14px 26px; font-size: 16px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-        .guest-cart-bar .cart-submit:disabled { background: #d8c3a4; cursor: not-allowed; }
-        .guest-recipe-item { background: #ffffff; border-radius: 24px; padding: 16px 18px 18px; margin-bottom: 16px; box-shadow: 0 8px 18px -8px rgba(70, 50, 30, 0.12); border: 1.5px solid #f1e5da; display: flex; gap: 16px; cursor: pointer; }
-        .guest-recipe-item.picked { border-color: #e8b87a; background: #fffaf2; }
-        .guest-recipe-item .recipe-thumb { width: 95px; height: 95px; border-radius: 20px; background: #f5ede5; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; color: #d4c0ad; font-size: 32px; border: 1px solid #efe2d6; }
-        .guest-recipe-item .recipe-thumb img { width: 100%; height: 100%; object-fit: cover; }
-        .guest-recipe-item .recipe-info { flex: 1; min-width: 0; }
-        .guest-recipe-item .recipe-name { font-size: 17px; font-weight: 600; color: #2b1f14; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-        .guest-recipe-item .recipe-steps { font-size: 13px; color: #6b5846; line-height: 1.45; background: #faf5f0; padding: 8px 10px; border-radius: 14px; white-space: pre-wrap; max-height: 70px; overflow-y: auto; border: 1px solid #f0e4d9; }
-        .confirm-overlay { position: fixed; inset: 0; background: rgba(30, 20, 10, 0.5); z-index: 1500; display: flex; align-items: center; justify-content: center; padding: 24px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
-        .confirm-overlay.show { opacity: 1; pointer-events: auto; }
-        .confirm-box { background: #ffffff; border-radius: 26px; width: 100%; max-width: 340px; padding: 24px 22px 20px; text-align: center; }
-        .confirm-icon { font-size: 42px; margin-bottom: 10px; }
-        .confirm-title { font-size: 18px; font-weight: 700; color: #3e2c1b; margin-bottom: 8px; }
-        .confirm-message { font-size: 14px; color: #7d6a56; line-height: 1.5; margin-bottom: 22px; word-break: break-word; }
-        .confirm-actions { display: flex; gap: 10px; }
-        .confirm-cancel { flex: 1; padding: 14px; border-radius: 40px; border: 1px solid #e2d4c4; background: #faf6f1; color: #7d633d; font-size: 15px; font-weight: 600; cursor: pointer; }
-        .confirm-ok { flex: 1; padding: 14px; border-radius: 40px; border: none; background: #c0392b; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
-        .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #3e2e1f; color: #f5ede4; padding: 12px 24px; border-radius: 40px; font-size: 15px; font-weight: 500; z-index: 2000; opacity: 0; transition: opacity 0.25s; pointer-events: none; max-width: 90vw; text-align: center; }
-        .toast.show { opacity: 1; }
-        #fridgeOverlay { z-index: 1050; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>今天吃啥</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
+body { background: #f7f3ed; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 16px 14px 100px; }
+.app-container { max-width: 600px; width: 100%; }
+.app-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; padding: 0 4px; gap: 10px; }
+.app-header h1 { font-size: 26px; font-weight: 700; color: #3e2c1b; display: flex; align-items: center; gap: 8px; }
+.app-header h1 .emoji { font-size: 28px; }
+.header-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.header-fridge-btn { background: #e8f5e5; color: #3e7d34; border: 1px solid #c6e3be; border-radius: 40px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.header-add-btn { background: #3f2e1e; color: #f5ede4; border: none; border-radius: 40px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.subhead { font-size: 14px; color: #8b7356; margin-bottom: 20px; border-left: 4px solid #d9b382; padding: 8px 14px; background: #fefcf9; border-radius: 0 12px 12px 0; line-height: 1.4; }
+
+/* 功能入口行 */
+.feature-bar { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 12px; margin-bottom: 4px; scrollbar-width: none; }
+.feature-bar::-webkit-scrollbar { display: none; }
+.feature-btn { flex-shrink: 0; background: #fff; border: 1.5px solid #e5d6c6; border-radius: 40px; padding: 9px 16px; font-size: 13px; font-weight: 600; color: #6b5846; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.feature-btn:active { transform: scale(0.97); }
+
+.recipes-header { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 0 12px; padding: 0 4px; }
+.recipes-header h2 { font-size: 20px; font-weight: 600; color: #3e2c1b; }
+.recipes-header .count-badge { background: #e5d6c6; border-radius: 40px; padding: 6px 14px; font-size: 13px; font-weight: 500; color: #4a3726; }
+.category-bar { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 12px; margin-bottom: 4px; scrollbar-width: none; }
+.category-bar::-webkit-scrollbar { display: none; }
+.category-chip { flex-shrink: 0; background: #ffffff; border: 1.5px solid #e5d6c6; border-radius: 40px; padding: 8px 16px; font-size: 13px; font-weight: 500; color: #6b5846; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.category-chip.active { background: #3f2e1e; border-color: #3f2e1e; color: #f5ede4; }
+.category-chip .chip-count { background: rgba(0, 0, 0, 0.08); border-radius: 20px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
+.category-chip.active .chip-count { background: rgba(255, 255, 255, 0.2); }
+.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fdfaf7; border: 1px solid #efe2d6; border-radius: 20px; padding: 10px 14px; margin-bottom: 16px; flex-wrap: wrap; }
+.manage-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #5c4a35; cursor: pointer; user-select: none; }
+.manage-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: #3f2e1e; cursor: pointer; }
+.toolbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.batch-del-btn { background: #fdeceb; color: #c0392b; border: 1px solid #f5c6c2; border-radius: 40px; padding: 8px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.batch-del-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.select-all-btn { background: #eef3f9; color: #5a7a9a; border: 1px solid #cfe0f0; border-radius: 40px; padding: 8px 14px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.share-btn { background: #fff3e0; color: #b06a1e; border: 1px solid #f0d9b5; border-radius: 40px; padding: 8px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.backup-btn { background: #eef3f9; color: #3d6a9e; border: 1px solid #cfe0f0; border-radius: 40px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.empty-message { background: #fdfaf7; border-radius: 24px; padding: 50px 20px; text-align: center; color: #b7a18c; font-size: 16px; border: 1px dashed #dccfc2; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.empty-message span { font-size: 52px; }
+.empty-message .empty-sub { font-size: 13px; color: #c4b3a2; }
+
+/* 菜谱卡片 */
+.recipe-item { background: #ffffff; border-radius: 24px; padding: 16px 18px 18px; margin-bottom: 16px; box-shadow: 0 8px 18px -8px rgba(70, 50, 30, 0.12); border: 1px solid #f1e5da; display: flex; gap: 16px; }
+.recipe-item.selected { border-color: #f0b8b3; background: #fffafa; }
+.select-checkbox { display: flex; align-items: flex-start; padding-top: 4px; }
+.select-checkbox input { width: 20px; height: 20px; accent-color: #c0392b; cursor: pointer; }
+.recipe-thumb { width: 95px; height: 95px; border-radius: 20px; background: #f5ede5; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; color: #d4c0ad; font-size: 42px; border: 1px solid #efe2d6; }
+.recipe-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.recipe-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.recipe-name { font-size: 18px; font-weight: 600; color: #2b1f14; margin-bottom: 6px; word-break: break-word; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.category-tag { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 40px; background: #f0e9e0; color: #7d633d; border: 1px solid #e2d4c4; white-space: nowrap; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
+.category-tag::after { content: '✎'; font-size: 9px; opacity: 0.55; margin-left: 1px; }
+.category-tag.cat-meat { background: #fde8e3; color: #b54a32; border-color: #f5c6bb; }
+.category-tag.cat-veg { background: #e8f5e5; color: #3e7d34; border-color: #c6e3be; }
+.category-tag.cat-soup { background: #e5f0fa; color: #2e6a9e; border-color: #bfdcf2; }
+.category-tag.cat-staple { background: #faf0dc; color: #9e7226; border-color: #edd9b0; }
+.category-tag.cat-cold { background: #e9f7f5; color: #2e8b7a; border-color: #bce4dd; }
+.category-tag.cat-dessert { background: #fbe8f2; color: #b03d7d; border-color: #f2c6df; }
+.category-tag.cat-other { background: #eeeaf5; color: #6b5a9e; border-color: #d8cef0; }
+.recipe-name .action-buttons { margin-left: auto; display: flex; gap: 4px; }
+.recipe-name .edit-btn, .recipe-name .delete-btn, .recipe-name .cook-btn { background: none; border: none; font-size: 17px; cursor: pointer; padding: 6px 4px; color: #b8a18c; border-radius: 8px; }
+.recipe-steps { font-size: 14px; color: #6b5846; line-height: 1.45; background: #faf5f0; padding: 10px 12px; border-radius: 16px; margin-top: 4px; word-break: break-word; white-space: pre-wrap; max-height: 100px; overflow-y: auto; border: 1px solid #f0e4d9; }
+
+.pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 24px 0 16px; }
+.page-btn { background: #3f2e1e; color: #f5ede4; border: none; border-radius: 40px; padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.page-btn:disabled { background: #d9cfc4; color: #a89b8c; cursor: not-allowed; }
+.page-info { font-size: 14px; color: #6b5846; font-weight: 500; }
+
+.fab { position: fixed; bottom: 26px; right: 26px; width: 60px; height: 60px; border-radius: 50%; background: #3f2e1e; color: #f5ede4; border: none; font-size: 30px; line-height: 1; cursor: pointer; box-shadow: 0 10px 24px -6px rgba(60, 40, 20, 0.5); display: flex; align-items: center; justify-content: center; z-index: 500; }
+
+.overlay { position: fixed; inset: 0; background: rgba(30, 20, 10, 0.5); z-index: 1000; display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.22s; }
+.overlay.show { opacity: 1; pointer-events: auto; }
+.sheet { background: #ffffff; border-radius: 28px 28px 0 0; width: 100%; max-width: 600px; max-height: 92vh; overflow-y: auto; padding: 24px 20px 28px; box-shadow: 0 -12px 30px -8px rgba(60, 40, 20, 0.25); transform: translateY(30px); transition: transform 0.25s; }
+.overlay.show .sheet { transform: translateY(0); }
+.sheet-handle { width: 42px; height: 5px; border-radius: 10px; background: #e2d4c4; margin: 0 auto 18px; }
+.sheet-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #4a3723; font-size: 19px; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 2px dashed #e7d8c8; }
+.edit-banner { background: #fff6e5; border-radius: 40px; padding: 10px 18px; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; border: 1px solid #ecdbba; font-size: 14px; color: #7d633d; font-weight: 500; }
+.edit-banner .cancel-edit { background: none; border: 1px solid #cdb79b; border-radius: 40px; padding: 6px 14px; color: #7d633d; font-size: 13px; font-weight: 500; cursor: pointer; }
+.hidden { display: none !important; }
+
+.fridge-intro { background: #e8f5e5; border: 1px solid #c6e3be; border-radius: 18px; padding: 14px 16px; margin-bottom: 18px; font-size: 13px; color: #3e7d34; line-height: 1.5; }
+.fridge-add-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.fridge-add-input { flex: 1; padding: 14px 16px; font-size: 15px; background: #fcf9f6; border: 1.5px solid #eadbcd; border-radius: 18px; outline: none; }
+.fridge-add-btn { background: #3e7d34; color: #fff; border: none; border-radius: 40px; padding: 14px 20px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.fridge-ocr-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.fridge-ocr-btn { flex: 1; background: #eef3f9; color: #3d6a9e; border: 1.5px solid #cfe0f0; border-radius: 40px; padding: 12px 16px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 140px; }
+.fridge-ocr-preview { position: relative; margin-bottom: 14px; border-radius: 14px; overflow: hidden; border: 1px solid #cfe0f0; background: #f5faff; }
+.fridge-ocr-preview img { width: 100%; display: block; max-height: 180px; object-fit: contain; }
+.ocr-remove { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%; background: rgba(60, 40, 20, 0.7); color: #fff; border: none; font-size: 16px; cursor: pointer; }
+.fridge-ocr-progress { margin-bottom: 14px; background: #f5faff; border-radius: 12px; padding: 12px; border: 1px solid #cfe0f0; }
+.fridge-ocr-progress-bar { height: 8px; background: #dbe8f3; border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
+.fridge-ocr-progress-fill { height: 100%; background: linear-gradient(90deg, #5b9bd5, #3d6a9e); width: 0%; transition: width 0.2s; border-radius: 10px; }
+.fridge-ocr-status { font-size: 12px; color: #5a7a9a; text-align: center; font-weight: 500; }
+.fridge-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fdfaf7; border: 1px solid #efe2d6; border-radius: 16px; padding: 10px 14px; margin-bottom: 14px; flex-wrap: wrap; }
+.fridge-count { font-size: 14px; font-weight: 600; color: #3e7d34; }
+.fridge-clear-btn { background: #fdeceb; color: #c0392b; border: 1px solid #f5c6c2; border-radius: 40px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.fridge-list { display: flex; flex-direction: column; gap: 10px; }
+.fridge-item { display: flex; align-items: center; gap: 10px; background: #ffffff; border: 1px solid #eef2ea; border-radius: 18px; padding: 12px 14px; }
+.fridge-item.expired { background: #fff5f5; border-color: #f5c6c2; }
+.fridge-item.soon, .fridge-item.today { background: #fffbf0; border-color: #f0d9b5; }
+.fridge-emoji { font-size: 22px; flex-shrink: 0; }
+.fridge-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.fridge-name { font-size: 15px; font-weight: 500; color: #2b3a26; word-break: break-word; }
+.fridge-expire { font-size: 12px; font-weight: 500; }
+.fridge-expire.expired { color: #c0392b; }
+.fridge-expire.today { color: #d68910; }
+.fridge-expire.soon { color: #b06a1e; }
+.fridge-expire.fresh { color: #3e7d34; }
+.fridge-expire.none { color: #b8a18c; }
+.fridge-edit, .fridge-del { background: none; border: none; font-size: 17px; cursor: pointer; color: #c2ab97; padding: 4px 6px; }
+.fridge-empty { text-align: center; color: #b7c4b0; font-size: 14px; padding: 30px 20px; border: 1px dashed #d6e3d0; border-radius: 18px; background: #fafdf9; }
+.fridge-alert { border-radius: 14px; padding: 10px 14px; font-size: 13px; font-weight: 500; margin-bottom: 10px; }
+.fridge-alert.expired { background: #fdeceb; border: 1px solid #f5c6c2; color: #a93226; }
+.fridge-alert.soon { background: #fff6e5; border: 1px solid #ecdbba; color: #7d633d; }
+
+.smart-zone { background: #f0f7ff; border: 1.5px dashed #a8c8e8; border-radius: 20px; padding: 14px; margin-bottom: 20px; }
+.smart-tabs { display: flex; gap: 6px; background: #e3eef9; border-radius: 40px; padding: 4px; margin-bottom: 12px; }
+.smart-tab { flex: 1; background: none; border: none; border-radius: 40px; padding: 9px 12px; font-size: 13px; font-weight: 600; color: #5a7a9a; cursor: pointer; }
+.smart-tab.active { background: #ffffff; color: #2e5580; box-shadow: 0 2px 6px -2px rgba(50, 90, 140, 0.3); }
+.smart-panel { display: none; }
+.smart-panel.active { display: block; }
+.paste-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 6px; }
+.paste-header .label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #3d6a9e; }
+.paste-header .hint { font-size: 11px; color: #7b9cc0; }
+.paste-input { width: 100%; min-height: 90px; padding: 12px 14px; font-size: 14px; line-height: 1.5; background: #ffffff; border: 1.5px solid #cfe0f0; border-radius: 14px; outline: none; resize: vertical; }
+.paste-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.extract-btn { background: #3d6a9e; color: white; border: none; border-radius: 40px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; flex: 1; min-width: 150px; }
+.clear-paste-btn { background: #eef3f9; color: #5a7a9a; border: 1px solid #cfe0f0; border-radius: 40px; padding: 10px 16px; font-size: 14px; font-weight: 500; cursor: pointer; }
+.ocr-drop { background: #ffffff; border: 2px dashed #cfe0f0; border-radius: 16px; padding: 20px 14px; text-align: center; cursor: pointer; }
+.ocr-drop .ocr-icon { font-size: 38px; margin-bottom: 8px; }
+.ocr-drop .ocr-text { font-size: 14px; font-weight: 600; color: #3d6a9e; margin-bottom: 4px; }
+.ocr-drop .ocr-hint { font-size: 12px; color: #8ba9c4; }
+.ocr-preview { position: relative; margin-top: 12px; border-radius: 14px; overflow: hidden; border: 1px solid #cfe0f0; background: #f5faff; }
+.ocr-preview img { width: 100%; display: block; max-height: 220px; object-fit: contain; }
+.ocr-progress { margin-top: 12px; background: #f5faff; border-radius: 12px; padding: 12px; border: 1px solid #cfe0f0; }
+.ocr-progress-bar { height: 8px; background: #dbe8f3; border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
+.ocr-progress-fill { height: 100%; background: linear-gradient(90deg, #5b9bd5, #3d6a9e); width: 0%; transition: width 0.2s; border-radius: 10px; }
+.ocr-status { font-size: 12px; color: #5a7a9a; text-align: center; font-weight: 500; }
+.ocr-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.ocr-run-btn { background: #3d6a9e; color: white; border: none; border-radius: 40px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; flex: 1; min-width: 150px; }
+.ocr-run-btn:disabled { background: #b8c9db; cursor: not-allowed; }
+
+.img-upload-area { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.preview-container { width: 100%; aspect-ratio: 16 / 10; background: #faf6f1; border-radius: 20px; border: 2px dashed #d9c6b0; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; position: relative; }
+.preview-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.placeholder-icon { font-size: 40px; color: #c8b09b; margin-bottom: 6px; }
+.placeholder-text { color: #b8a18c; font-size: 14px; font-weight: 500; }
+.upload-btn { background: #f1e7dd; border: none; border-radius: 40px; padding: 10px 20px; font-size: 14px; font-weight: 500; color: #4e3a28; display: flex; align-items: center; gap: 6px; cursor: pointer; border: 1px solid #e2d2c0; }
+.upload-btn input[type="file"] { display: none; }
+.field { margin-bottom: 18px; }
+.field label { font-size: 14px; font-weight: 500; color: #5c4a35; display: block; margin-bottom: 7px; }
+.field input, .field textarea { width: 100%; padding: 14px 16px; font-size: 15px; background: #fcf9f6; border: 1.5px solid #eadbcd; border-radius: 18px; outline: none; resize: vertical; }
+.field textarea { min-height: 120px; line-height: 1.5; }
+.save-btn { background: #3f2e1e; color: white; border: none; border-radius: 40px; padding: 17px 24px; font-size: 17px; font-weight: 600; width: 100%; cursor: pointer; margin-top: 8px; }
+.save-btn.update-mode { background: #2e6b4a; }
+.sheet-close-btn { background: none; border: 1px solid #e2d4c4; border-radius: 40px; padding: 10px 18px; font-size: 14px; color: #7d633d; cursor: pointer; margin-top: 10px; width: 100%; font-weight: 500; }
+
+.category-picker-overlay { position: fixed; inset: 0; background: rgba(30, 20, 10, 0.45); z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.category-picker-overlay.show { opacity: 1; pointer-events: auto; }
+.category-picker { background: #ffffff; border-radius: 28px; width: 100%; max-width: 420px; padding: 24px 20px 20px; }
+.picker-title { font-size: 18px; font-weight: 600; color: #3e2c1b; margin-bottom: 6px; }
+.picker-subtitle { font-size: 13px; color: #9c8870; margin-bottom: 18px; }
+.picker-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 18px; }
+.picker-option { display: flex; align-items: center; gap: 8px; padding: 14px; border-radius: 18px; border: 1.5px solid #eee2d6; background: #fdfaf7; cursor: pointer; font-size: 15px; font-weight: 500; color: #4a3726; }
+.picker-option.current { border-color: #3f2e1e; background: #f5ede4; }
+.picker-option .opt-icon { font-size: 20px; }
+.picker-option .opt-check { margin-left: auto; font-size: 14px; color: #3f2e1e; font-weight: 700; }
+.picker-actions { display: flex; gap: 10px; }
+.picker-cancel { flex: 1; padding: 14px; border-radius: 40px; border: 1px solid #e2d4c4; background: #faf6f1; color: #7d633d; font-size: 15px; font-weight: 500; cursor: pointer; }
+
+.share-panel { background: #ffffff; border-radius: 28px; width: 100%; max-width: 440px; padding: 26px 22px 22px; max-height: 90vh; overflow-y: auto; }
+.share-title { font-size: 20px; font-weight: 600; color: #3e2c1b; margin-bottom: 6px; }
+.share-desc { font-size: 13px; color: #9c8870; margin-bottom: 18px; line-height: 1.5; }
+.share-checkbox-row { display: flex; align-items: center; gap: 10px; background: #f5faff; border: 1.5px solid #cfe0f0; border-radius: 16px; padding: 12px 14px; margin-bottom: 14px; cursor: pointer; }
+.share-checkbox-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: #3d6a9e; cursor: pointer; flex-shrink: 0; }
+.share-checkbox-row .cb-text { flex: 1; font-size: 13px; color: #3d6a9e; line-height: 1.4; }
+.share-checkbox-row .cb-text strong { display: block; font-size: 14px; font-weight: 600; color: #2e5580; margin-bottom: 2px; }
+.share-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.share-option { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 18px; border: 1.5px solid #eee2d6; background: #fdfaf7; cursor: pointer; text-align: left; }
+.share-option .opt-icon { font-size: 26px; flex-shrink: 0; }
+.share-option .opt-text { flex: 1; min-width: 0; }
+.share-option .opt-text .opt-name { font-size: 15px; font-weight: 600; color: #3e2c1b; margin-bottom: 2px; }
+.share-option .opt-text .opt-desc { font-size: 12px; color: #9c8870; line-height: 1.4; }
+.share-link-box { background: #f5f0e9; border: 1px solid #e2d4c4; border-radius: 16px; padding: 12px 14px; font-size: 12px; color: #6b5846; word-break: break-all; margin-bottom: 14px; max-height: 120px; overflow-y: auto; line-height: 1.5; font-family: monospace; }
+.share-link-info { background: #fff6e5; border: 1px solid #ecdbba; border-radius: 14px; padding: 10px 14px; font-size: 12px; color: #7d633d; margin-bottom: 14px; line-height: 1.5; }
+.share-link-info.warning { background: #fdeceb; border-color: #f5c6c2; color: #a93226; }
+.share-actions { display: flex; gap: 10px; }
+.share-cancel { flex: 1; padding: 14px; border-radius: 40px; border: 1px solid #e2d4c4; background: #faf6f1; color: #7d633d; font-size: 15px; font-weight: 500; cursor: pointer; }
+.share-confirm { flex: 1; padding: 14px; border-radius: 40px; border: none; background: #3f2e1e; color: #f5ede4; font-size: 15px; font-weight: 600; cursor: pointer; }
+
+.guest-banner { background: linear-gradient(135deg, #fff6e5 0%, #fef0d9 100%); border: 1.5px solid #f0d9b5; border-radius: 24px; padding: 20px; margin-bottom: 22px; text-align: center; }
+.guest-banner .guest-icon { font-size: 42px; margin-bottom: 8px; }
+.guest-banner .guest-title { font-size: 19px; font-weight: 700; color: #8b5a1e; margin-bottom: 6px; }
+.guest-banner .guest-desc { font-size: 14px; color: #a07a3e; line-height: 1.5; }
+.guest-cart-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #ffffff; border-top: 1px solid #eadbcd; padding: 14px 18px; z-index: 900; display: flex; align-items: center; gap: 12px; max-width: 600px; margin: 0 auto; }
+.guest-cart-bar .cart-info { flex: 1; font-size: 14px; color: #5c4a35; font-weight: 500; }
+.guest-cart-bar .cart-info .cart-count { color: #b06a1e; font-weight: 700; font-size: 16px; }
+.guest-cart-bar .cart-submit { background: #b06a1e; color: #fff; border: none; border-radius: 40px; padding: 14px 26px; font-size: 16px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.guest-cart-bar .cart-submit:disabled { background: #d8c3a4; cursor: not-allowed; }
+.guest-recipe-item { background: #ffffff; border-radius: 24px; padding: 16px 18px 18px; margin-bottom: 16px; box-shadow: 0 8px 18px -8px rgba(70, 50, 30, 0.12); border: 1.5px solid #f1e5da; display: flex; gap: 16px; cursor: pointer; }
+.guest-recipe-item.picked { border-color: #e8b87a; background: #fffaf2; }
+.guest-recipe-item .recipe-thumb { width: 95px; height: 95px; border-radius: 20px; background: #f5ede5; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; color: #d4c0ad; font-size: 32px; border: 1px solid #efe2d6; }
+.guest-recipe-item .recipe-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.guest-recipe-item .recipe-info { flex: 1; min-width: 0; }
+.guest-recipe-item .recipe-name { font-size: 17px; font-weight: 600; color: #2b1f14; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.guest-recipe-item .recipe-steps { font-size: 13px; color: #6b5846; line-height: 1.45; background: #faf5f0; padding: 8px 10px; border-radius: 14px; white-space: pre-wrap; max-height: 70px; overflow-y: auto; border: 1px solid #f0e4d9; }
+
+.confirm-overlay { position: fixed; inset: 0; background: rgba(30, 20, 10, 0.5); z-index: 1500; display: flex; align-items: center; justify-content: center; padding: 24px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.confirm-overlay.show { opacity: 1; pointer-events: auto; }
+.confirm-box { background: #ffffff; border-radius: 26px; width: 100%; max-width: 340px; padding: 24px 22px 20px; text-align: center; }
+.confirm-icon { font-size: 42px; margin-bottom: 10px; }
+.confirm-title { font-size: 18px; font-weight: 700; color: #3e2c1b; margin-bottom: 8px; }
+.confirm-message { font-size: 14px; color: #7d6a56; line-height: 1.5; margin-bottom: 22px; word-break: break-word; white-space: pre-wrap; }
+.confirm-actions { display: flex; gap: 10px; }
+.confirm-cancel { flex: 1; padding: 14px; border-radius: 40px; border: 1px solid #e2d4c4; background: #faf6f1; color: #7d633d; font-size: 15px; font-weight: 600; cursor: pointer; }
+.confirm-ok { flex: 1; padding: 14px; border-radius: 40px; border: none; background: #c0392b; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+
+.toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #3e2e1f; color: #f5ede4; padding: 12px 24px; border-radius: 40px; font-size: 15px; font-weight: 500; z-index: 2000; opacity: 0; transition: opacity 0.25s; pointer-events: none; max-width: 90vw; text-align: center; }
+.toast.show { opacity: 1; }
+#fridgeOverlay { z-index: 1050; }
+
+/* ===== 新功能：日历 / 个人主页 / 轻食 / 运动 / 摇一摇 ===== */
+.tool-section { background: #fdfaf7; border: 1px solid #efe2d6; border-radius: 20px; padding: 16px; margin-bottom: 16px; }
+.tool-section h3 { font-size: 15px; color: #4a3723; margin-bottom: 10px; font-weight: 600; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-head { text-align: center; font-size: 12px; color: #9c8870; font-weight: 600; padding: 4px 0; }
+.cal-cell { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 10px; background: #fff; border: 1px solid #eee2d6; font-size: 13px; color: #4a3726; cursor: pointer; position: relative; }
+.cal-cell.empty { background: transparent; border: none; cursor: default; }
+.cal-cell.today { border-color: #b06a1e; background: #fff6e5; font-weight: 700; }
+.cal-cell.has-dish { background: #e8f5e5; border-color: #c6e3be; }
+.cal-cell .cal-dot { position: absolute; top: 4px; right: 5px; background: #3e7d34; color: #fff; font-size: 10px; border-radius: 20px; padding: 0 5px; font-weight: 700; }
+.cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.cal-nav button { background: #f1e7dd; border: 1px solid #e2d2c0; border-radius: 40px; padding: 6px 14px; font-size: 13px; color: #4e3a28; cursor: pointer; }
+.cal-nav .cal-month { font-size: 15px; font-weight: 600; color: #3e2c1b; }
+.cal-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.cal-actions button { flex: 1; background: #3f2e1e; color: #f5ede4; border: none; border-radius: 40px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; min-width: 130px; }
+.cal-actions button.secondary { background: #eef3f9; color: #3d6a9e; border: 1px solid #cfe0f0; }
+
+.profile-avatar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.avatar-preview { width: 72px; height: 72px; border-radius: 50%; background: #f5ede5; border: 2px solid #e2d4c4; display: flex; align-items: center; justify-content: center; font-size: 34px; overflow: hidden; flex-shrink: 0; }
+.avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+.btn-secondary { background: #eef3f9; color: #3d6a9e; border: 1px solid #cfe0f0; border-radius: 40px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.btn-primary { background: #3f2e1e; color: #f5ede4; border: none; border-radius: 40px; padding: 12px 20px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.btn-primary.small { padding: 10px 16px; font-size: 14px; }
+.input { width: 100%; padding: 13px 16px; font-size: 15px; background: #fcf9f6; border: 1.5px solid #eadbcd; border-radius: 16px; outline: none; margin-bottom: 10px; }
+.row { display: flex; gap: 8px; align-items: stretch; }
+.row .input { margin-bottom: 0; flex: 1; }
+.weight-chart { width: 100%; height: 130px; display: block; }
+.weight-range { font-size: 12px; color: #9c8870; text-align: center; margin-top: 4px; }
+.weight-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #faf5f0; border: 1px solid #f0e4d9; border-radius: 12px; margin-bottom: 6px; font-size: 14px; color: #4a3726; }
+.weight-item .w-del { background: none; border: none; color: #c0392b; cursor: pointer; font-size: 16px; }
+.bmi-box { background: #e8f5e5; border: 1px solid #c6e3be; border-radius: 14px; padding: 10px 14px; font-size: 13px; color: #3e7d34; margin-top: 8px; font-weight: 500; }
+
+.light-card { background: #fff; border: 1px solid #d6e3d0; border-radius: 16px; padding: 12px 14px; margin-bottom: 8px; }
+.light-card .light-name { font-size: 15px; font-weight: 600; color: #2b3a26; margin-bottom: 4px; }
+.light-card .light-hit { font-size: 12px; color: #3e7d34; }
+
+.exercise-today { font-size: 14px; color: #3d6a9e; margin-bottom: 12px; }
+.exercise-bars { display: flex; align-items: flex-end; gap: 6px; height: 120px; }
+.ex-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.ex-bar { width: 100%; background: linear-gradient(180deg, #5b9bd5, #3d6a9e); border-radius: 8px 8px 0 0; min-height: 2px; transition: height 0.3s; }
+.ex-label { font-size: 10px; color: #8ba9c4; margin-top: 4px; }
+.exercise-list { margin-top: 14px; }
+.exercise-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #f5faff; border: 1px solid #cfe0f0; border-radius: 12px; margin-bottom: 6px; font-size: 13px; color: #2e5580; }
+.exercise-item .ex-del { background: none; border: none; color: #c0392b; cursor: pointer; font-size: 16px; }
+
+.dish-emoji { font-size: 42px; line-height: 1; }
+</style>
 </head>
 <body>
-    <div class="app-container" id="appContainer">
-        <div id="ownerView">
-            <div class="app-header">
-                <h1><span class="emoji">🍜</span> 今天吃啥</h1>
-                <div class="header-actions">
-                    <button class="header-fridge-btn" id="fridgeBtn">🧊 冰箱</button>
-                    <button class="header-add-btn" id="headerAddBtn">＋ 添加</button>
-                </div>
-            </div>
-
-            <div class="subhead">📸 拍下菜品 · 记下步骤 · 留住味道</div>
-
-            <div class="recipes-header">
-                <h2>🍽️ 我的菜谱</h2>
-                <div class="count-badge" id="recipeCount">0 道</div>
-            </div>
-
-            <div class="category-bar" id="categoryBar"></div>
-
-            <div class="toolbar">
-                <label class="manage-toggle">
-                    <input type="checkbox" id="manageModeToggle">
-                    <span>批量管理</span>
-                </label>
-                <div class="toolbar-actions">
-                    <button class="select-all-btn hidden" id="selectAllBtn">全选</button>
-                    <button class="batch-del-btn hidden" id="batchDelBtn" disabled>🗑️ 删除 (<span id="selectedCount">0</span>)</button>
-                    <button class="backup-btn" id="exportBtn">📦 导出</button>
-                    <button class="backup-btn" id="importBtn">📥 导入</button>
-                    <button class="share-btn" id="shareBtn">📤 分享点菜</button>
-                    <input type="file" id="importFileInput" accept=".json" style="display:none;">
-                </div>
-            </div>
-
-            <div id="recipeList"></div>
-        </div>
-
-        <div id="guestView" class="hidden">
-            <div class="guest-banner">
-                <div class="guest-icon">🍽️</div>
-                <div class="guest-title" id="guestTitle">有人喊你点菜啦</div>
-                <div class="guest-desc" id="guestDesc">从下面的菜谱里勾选想吃的，生成点菜清单</div>
-            </div>
-            <div id="guestRecipeList"></div>
-            <div style="height: 90px;"></div>
-        </div>
-    </div>
-
-    <button class="fab" id="fabBtn" title="添加新菜">＋</button>
-
-    <div class="overlay" id="formOverlay">
-        <div class="sheet" id="formSheet">
-            <div class="sheet-handle"></div>
-            <div class="sheet-title"><i id="formIcon">📝</i> <span id="formTitle">添加新菜</span></div>
-
-            <div class="edit-banner hidden" id="editBanner">
-                <span>✏️ 正在编辑菜谱</span>
-                <button class="cancel-edit" id="cancelEditBtn">取消编辑</button>
-            </div>
-
-            <div class="smart-zone">
-                <div class="smart-tabs">
-                    <button class="smart-tab active" data-tab="paste">📋 粘贴文案</button>
-                    <button class="smart-tab" data-tab="image">🖼️ 图片识别</button>
-                </div>
-
-                <div class="smart-panel active" id="panel-paste">
-                    <div class="paste-header">
-                        <span class="label">📋 从平台文案智能提取</span>
-                        <span class="hint">小红书 / 抖音等复制文案</span>
-                    </div>
-                    <textarea id="pasteInput" class="paste-input" placeholder="把小红书/抖音等平台的菜谱文案粘贴到这里～"></textarea>
-                    <div class="paste-actions">
-                        <button class="extract-btn" id="extractBtn">✨ 智能提取菜名和步骤</button>
-                        <button class="clear-paste-btn" id="clearPasteBtn">🧹 清空</button>
-                    </div>
-                </div>
-
-                <div class="smart-panel" id="panel-image">
-                    <div class="paste-header">
-                        <span class="label">🖼️ 上传菜谱截图识别文字</span>
-                        <span class="hint">印刷体效果最好</span>
-                    </div>
-                    <div class="ocr-drop" id="ocrDrop">
-                        <div class="ocr-icon">📷</div>
-                        <div class="ocr-text">点击选择菜谱截图</div>
-                        <div class="ocr-hint">支持 JPG / PNG</div>
-                    </div>
-                    <input type="file" id="ocrFileInput" accept="image/*" style="display:none;">
-                    <div class="ocr-preview hidden" id="ocrPreview">
-                        <img id="ocrPreviewImg" src="" alt="">
-                        <button class="ocr-remove" id="ocrRemoveBtn">✕</button>
-                    </div>
-                    <div class="ocr-progress hidden" id="ocrProgress">
-                        <div class="ocr-progress-bar"><div class="ocr-progress-fill" id="ocrProgressFill"></div></div>
-                        <div class="ocr-status" id="ocrStatus">准备中...</div>
-                    </div>
-                    <div class="ocr-actions">
-                        <button class="ocr-run-btn" id="ocrRunBtn" disabled>🔍 开始识别文字</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="img-upload-area">
-                <div class="preview-container" id="previewContainer">
-                    <div id="previewPlaceholder" style="display: flex; flex-direction: column; align-items: center;">
-                        <div class="placeholder-icon">🥘</div>
-                        <div class="placeholder-text">点击添加菜品展示图</div>
-                    </div>
-                    <img id="previewImg" class="preview-img hidden" src="" alt="">
-                </div>
-                <label class="upload-btn" for="imageInput">
-                    📁 选择菜品图
-                    <input type="file" id="imageInput" accept="image/*">
-                </label>
-            </div>
-
-            <div class="field" style="margin-top: 18px;">
-                <label for="dishName">菜名</label>
-                <input type="text" id="dishName" placeholder="例如：红烧排骨..." maxlength="40">
-            </div>
-
-            <div class="field">
-                <label for="steps">关键步骤</label>
-                <textarea id="steps" placeholder="例如：&#10;1. 排骨焯水去腥&#10;2. 炒糖色"></textarea>
-            </div>
-
-            <button class="save-btn" id="saveBtn">💾 保存这道菜</button>
-            <button class="sheet-close-btn" id="sheetCloseBtn">取消</button>
-        </div>
-    </div>
-
-    <div class="overlay" id="fridgeOverlay">
-        <div class="sheet" id="fridgeSheet">
-            <div class="sheet-handle"></div>
-            <div class="sheet-title"><i>🧊</i> <span>我的冰箱</span></div>
-
-            <div class="fridge-intro">
-                <strong>记录家里现有的食材</strong><br>
-                手动输入，或上传冰箱/购物小票照片自动识别文字。
-            </div>
-
-            <div class="fridge-add-row">
-                <input type="text" id="fridgeInput" class="fridge-add-input" placeholder="例如：鸡蛋、西红柿..." maxlength="30">
-                <button class="fridge-add-btn" id="fridgeAddBtn">添加</button>
-            </div>
-
-            <div class="fridge-ocr-row">
-                <button class="fridge-ocr-btn" id="fridgeOcrPickBtn">📷 拍照/选图识别</button>
-            </div>
-            <input type="file" id="fridgeOcrFileInput" accept="image/*" style="display:none;">
-
-            <div class="fridge-ocr-preview hidden" id="fridgeOcrPreview">
-                <img id="fridgeOcrPreviewImg" src="" alt="">
-                <button class="ocr-remove" id="fridgeOcrRemoveBtn">✕</button>
-            </div>
-
-            <div class="fridge-ocr-progress hidden" id="fridgeOcrProgress">
-                <div class="fridge-ocr-progress-bar"><div class="fridge-ocr-progress-fill" id="fridgeOcrProgressFill"></div></div>
-                <div class="fridge-ocr-status" id="fridgeOcrStatus">准备中...</div>
-            </div>
-
-            <div class="fridge-ocr-row hidden" id="fridgeOcrRunRow">
-                <button class="fridge-ocr-btn" id="fridgeOcrRunBtn" style="background:#3d6a9e;color:#fff;border-color:#3d6a9e;">🔍 开始识别文字</button>
-            </div>
-
-            <div class="fridge-toolbar">
-                <span class="fridge-count" id="fridgeCount">共 0 种食材</span>
-                <div class="fridge-toolbar-actions">
-                    <button class="fridge-clear-btn" id="fridgeClearBtn">清空冰箱</button>
-                </div>
-            </div>
-
-            <div class="fridge-list" id="fridgeList"></div>
-
-            <button class="sheet-close-btn" id="fridgeCloseBtn" style="margin-top:18px;">关闭</button>
-        </div>
-    </div>
-
-    <div class="category-picker-overlay" id="categoryPickerOverlay">
-        <div class="category-picker">
-            <div class="picker-title">🏷️ 手动纠正分类</div>
-            <div class="picker-subtitle" id="pickerSubtitle"></div>
-            <div class="picker-grid" id="pickerGrid"></div>
-            <div class="picker-actions">
-                <button class="picker-cancel" id="pickerCancelBtn">取消</button>
+<div class="app-container" id="appContainer">
+    <div id="ownerView">
+        <div class="app-header">
+            <h1><span class="emoji">🍜</span> 今天吃啥</h1>
+            <div class="header-actions">
+                <button class="header-fridge-btn" id="fridgeBtn">🧊 冰箱</button>
+                <button class="header-add-btn" id="headerAddBtn">＋ 添加</button>
             </div>
         </div>
-    </div>
 
-    <div class="overlay" id="shareOverlay">
-        <div class="share-panel">
-            <div class="share-title">📤 分享菜谱给舍友</div>
-            <div class="share-desc">选择分享方式，生成链接后发给舍友。</div>
+        <div class="subhead">📸 拍下菜品 · 记下步骤 · 留住味道</div>
 
-            <label class="share-checkbox-row">
-                <input type="checkbox" id="shareWithImages">
-                <div class="cb-text">
-                    <strong>带上菜品图片</strong>
-                    图片会压缩，链接会变长。建议不放。
-                </div>
+        <div class="feature-bar">
+            <button class="feature-btn" id="calendarBtn">📅 做菜日历</button>
+            <button class="feature-btn" id="profileBtn">👤 我的</button>
+            <button class="feature-btn" id="lightBtn">🥗 轻食搭配</button>
+            <button class="feature-btn" id="exerciseBtn">🏃 运动打卡</button>
+            <button class="feature-btn" id="shakeBtn">🎲 摇一摇</button>
+        </div>
+
+        <div class="recipes-header">
+            <h2>🍽️ 我的菜谱</h2>
+            <div class="count-badge" id="recipeCount">0 道</div>
+        </div>
+
+        <div class="category-bar" id="categoryBar"></div>
+
+        <div class="toolbar">
+            <label class="manage-toggle">
+                <input type="checkbox" id="manageModeToggle">
+                <span>批量管理</span>
             </label>
-
-            <div class="share-options" id="shareOptions">
-                <div class="share-option" data-mode="all">
-                    <span class="opt-icon">📚</span>
-                    <div class="opt-text">
-                        <div class="opt-name">分享全部菜谱</div>
-                        <div class="opt-desc">把当前所有菜谱打包分享</div>
-                    </div>
-                </div>
-                <div class="share-option" data-mode="filtered">
-                    <span class="opt-icon">🔍</span>
-                    <div class="opt-text">
-                        <div class="opt-name">分享当前分类</div>
-                        <div class="opt-desc">只分享当前筛选分类下的菜谱</div>
-                    </div>
-                </div>
-                <div class="share-option" data-mode="selected">
-                    <span class="opt-icon">✅</span>
-                    <div class="opt-text">
-                        <div class="opt-name">分享选中的菜</div>
-                        <div class="opt-desc">当前已选 <span id="shareSelectedCount">0</span> 道</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="share-link-info hidden" id="shareLinkInfo"></div>
-            <div class="share-link-box hidden" id="shareLinkBox"></div>
-
-            <div class="share-actions">
-                <button class="share-cancel" id="shareCancelBtn">取消</button>
-                <button class="share-confirm hidden" id="shareConfirmBtn">复制链接</button>
+            <div class="toolbar-actions">
+                <button class="select-all-btn hidden" id="selectAllBtn">全选</button>
+                <button class="batch-del-btn hidden" id="batchDelBtn" disabled>🗑️ 删除 (<span id="selectedCount">0</span>)</button>
+                <button class="backup-btn" id="exportBtn">📦 导出</button>
+                <button class="backup-btn" id="importBtn">📥 导入</button>
+                <button class="share-btn" id="shareBtn">📤 分享点菜</button>
+                <input type="file" id="importFileInput" accept=".json" style="display:none;">
             </div>
         </div>
+
+        <div id="recipeList"></div>
     </div>
 
-    <div class="guest-cart-bar hidden" id="guestCartBar">
-        <div class="cart-info">已选 <span class="cart-count" id="guestCartCount">0</span> 道菜</div>
-        <button class="cart-submit" id="guestSubmitBtn" disabled>生成点菜清单</button>
+    <div id="guestView" class="hidden">
+        <div class="guest-banner">
+            <div class="guest-icon">🍽️</div>
+            <div class="guest-title" id="guestTitle">有人喊你点菜啦</div>
+            <div class="guest-desc" id="guestDesc">从下面的菜谱里勾选想吃的，生成点菜清单</div>
+        </div>
+        <div id="guestRecipeList"></div>
+        <div style="height: 90px;"></div>
     </div>
+</div>
 
-    <div class="confirm-overlay" id="confirmOverlay">
-        <div class="confirm-box">
-            <div class="confirm-icon" id="confirmIcon">🗑️</div>
-            <div class="confirm-title" id="confirmTitle">确认删除</div>
-            <div class="confirm-message" id="confirmMessage">确定要删除这道菜吗？</div>
-            <div class="confirm-actions">
-                <button class="confirm-cancel" id="confirmCancelBtn">取消</button>
-                <button class="confirm-ok" id="confirmOkBtn">删除</button>
+<button class="fab" id="fabBtn" title="添加新菜">＋</button>
+
+<!-- 表单 -->
+<div class="overlay" id="formOverlay">
+    <div class="sheet" id="formSheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title"><i id="formIcon">📝</i> <span id="formTitle">添加新菜</span></div>
+
+        <div class="edit-banner hidden" id="editBanner">
+            <span>✏️ 正在编辑菜谱</span>
+            <button class="cancel-edit" id="cancelEditBtn">取消编辑</button>
+        </div>
+
+        <div class="smart-zone">
+            <div class="smart-tabs">
+                <button class="smart-tab active" data-tab="paste">📋 粘贴文案</button>
+                <button class="smart-tab" data-tab="image">🖼️ 图片识别</button>
+            </div>
+
+            <div class="smart-panel active" id="panel-paste">
+                <div class="paste-header">
+                    <span class="label">📋 从平台文案智能提取</span>
+                    <span class="hint">小红书 / 抖音等复制文案</span>
+                </div>
+                <textarea id="pasteInput" class="paste-input" placeholder="把小红书/抖音等平台的菜谱文案粘贴到这里～"></textarea>
+                <div class="paste-actions">
+                    <button class="extract-btn" id="extractBtn">✨ 智能提取菜名和步骤</button>
+                    <button class="clear-paste-btn" id="clearPasteBtn">🧹 清空</button>
+                </div>
+            </div>
+
+            <div class="smart-panel" id="panel-image">
+                <div class="paste-header">
+                    <span class="label">🖼️ 上传菜谱截图识别文字</span>
+                    <span class="hint">印刷体效果最好</span>
+                </div>
+                <div class="ocr-drop" id="ocrDrop">
+                    <div class="ocr-icon">📷</div>
+                    <div class="ocr-text">点击选择菜谱截图</div>
+                    <div class="ocr-hint">支持 JPG / PNG</div>
+                </div>
+                <input type="file" id="ocrFileInput" accept="image/*" style="display:none;">
+                <div class="ocr-preview hidden" id="ocrPreview">
+                    <img id="ocrPreviewImg" src="" alt="">
+                    <button class="ocr-remove" id="ocrRemoveBtn">✕</button>
+                </div>
+                <div class="ocr-progress hidden" id="ocrProgress">
+                    <div class="ocr-progress-bar"><div class="ocr-progress-fill" id="ocrProgressFill"></div></div>
+                    <div class="ocr-status" id="ocrStatus">准备中...</div>
+                </div>
+                <div class="ocr-actions">
+                    <button class="ocr-run-btn" id="ocrRunBtn" disabled>🔍 开始识别文字</button>
+                </div>
             </div>
         </div>
+
+        <div class="img-upload-area">
+            <div class="preview-container" id="previewContainer">
+                <div id="previewPlaceholder" style="display: flex; flex-direction: column; align-items: center;">
+                    <div class="placeholder-icon">🥘</div>
+                    <div class="placeholder-text">点击添加菜品展示图</div>
+                </div>
+                <img id="previewImg" class="preview-img hidden" src="" alt="">
+            </div>
+            <label class="upload-btn" for="imageInput">
+                📁 选择菜品图
+                <input type="file" id="imageInput" accept="image/*">
+            </label>
+        </div>
+
+        <div class="field" style="margin-top: 18px;">
+            <label for="dishName">菜名</label>
+            <input type="text" id="dishName" placeholder="例如：红烧排骨..." maxlength="40">
+        </div>
+
+        <div class="field">
+            <label for="steps">关键步骤</label>
+            <textarea id="steps" placeholder="例如：&#10;1. 排骨焯水去腥&#10;2. 炒糖色"></textarea>
+        </div>
+
+        <button class="save-btn" id="saveBtn">💾 保存这道菜</button>
+        <button class="sheet-close-btn" id="sheetCloseBtn">取消</button>
     </div>
+</div>
 
-    <div class="toast" id="toast"></div>
+<!-- 冰箱 -->
+<div class="overlay" id="fridgeOverlay">
+    <div class="sheet" id="fridgeSheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title"><i>🧊</i> <span>我的冰箱</span></div>
 
-    <script src="app.js"></script>
+        <div class="fridge-intro">
+            <strong>记录家里现有的食材</strong><br>
+            手动输入，或上传冰箱/购物小票照片自动识别文字。<br>
+            <span style="color:#c0392b;">支持填写保质期，过期会提醒。</span>
+        </div>
+
+        <div class="fridge-add-row">
+            <input type="text" id="fridgeInput" class="fridge-add-input" placeholder="食材名，多个用逗号分隔" maxlength="60">
+            <button class="fridge-add-btn" id="fridgeAddBtn">添加</button>
+        </div>
+
+        <div class="fridge-ocr-row">
+            <button class="fridge-ocr-btn" id="fridgeOcrPickBtn">📷 拍照/选图识别</button>
+        </div>
+        <input type="file" id="fridgeOcrFileInput" accept="image/*" style="display:none;">
+
+        <div class="fridge-ocr-preview hidden" id="fridgeOcrPreview">
+            <img id="fridgeOcrPreviewImg" src="" alt="">
+            <button class="ocr-remove" id="fridgeOcrRemoveBtn">✕</button>
+        </div>
+
+        <div class="fridge-ocr-progress hidden" id="fridgeOcrProgress">
+            <div class="fridge-ocr-progress-bar"><div class="fridge-ocr-progress-fill" id="fridgeOcrProgressFill"></div></div>
+            <div class="fridge-ocr-status" id="fridgeOcrStatus">准备中...</div>
+        </div>
+
+        <div class="fridge-ocr-row hidden" id="fridgeOcrRunRow">
+            <button class="fridge-ocr-btn" id="fridgeOcrRunBtn" style="background:#3d6a9e;color:#fff;border-color:#3d6a9e;">🔍 开始识别文字</button>
+        </div>
+
+        <div class="fridge-toolbar">
+            <span class="fridge-count" id="fridgeCount">共 0 种食材</span>
+            <div class="fridge-toolbar-actions">
+                <button class="fridge-clear-btn" id="fridgeClearBtn">清空冰箱</button>
+            </div>
+        </div>
+
+        <div class="fridge-list" id="fridgeList"></div>
+
+        <button class="sheet-close-btn" id="fridgeCloseBtn" style="margin-top:18px;">关闭</button>
+    </div>
+</div>
+
+<!-- 冰箱食材编辑弹层 -->
+<div class="category-picker-overlay" id="fridgeEditOverlay">
+    <div class="category-picker">
+        <div class="picker-title">✏️ 编辑食材</div>
+        <div class="picker-subtitle">修改名称和保质期</div>
+        <input type="text" id="fridgeEditName" class="input" placeholder="食材名称" maxlength="30">
+        <input type="date" id="fridgeEditDate" class="input">
+        <div class="picker-actions">
+            <button class="picker-cancel" id="fridgeEditCancel">取消</button>
+            <button class="share-confirm" id="fridgeEditSave">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- 分类纠正 -->
+<div class="category-picker-overlay" id="categoryPickerOverlay">
+    <div class="category-picker">
+        <div class="picker-title">🏷️ 手动纠正分类</div>
+        <div class="picker-subtitle" id="pickerSubtitle"></div>
+        <div class="picker-grid" id="pickerGrid"></div>
+        <div class="picker-actions">
+            <button class="picker-cancel" id="pickerCancelBtn">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 分享 -->
+<div class="overlay" id="shareOverlay">
+    <div class="share-panel">
+        <div class="share-title">📤 分享菜谱给舍友</div>
+        <div class="share-desc">选择分享方式，生成链接后发给舍友。</div>
+
+        <label class="share-checkbox-row">
+            <input type="checkbox" id="shareWithImages">
+            <div class="cb-text">
+                <strong>带上菜品图片</strong>
+                图片会压缩，链接会变长。建议不放。
+            </div>
+        </label>
+
+        <div class="share-options" id="shareOptions">
+            <div class="share-option" data-mode="all">
+                <span class="opt-icon">📚</span>
+                <div class="opt-text">
+                    <div class="opt-name">分享全部菜谱</div>
+                    <div class="opt-desc">把当前所有菜谱打包分享</div>
+                </div>
+            </div>
+            <div class="share-option" data-mode="filtered">
+                <span class="opt-icon">🔍</span>
+                <div class="opt-text">
+                    <div class="opt-name">分享当前分类</div>
+                    <div class="opt-desc">只分享当前筛选分类下的菜谱</div>
+                </div>
+            </div>
+            <div class="share-option" data-mode="selected">
+                <span class="opt-icon">✅</span>
+                <div class="opt-text">
+                    <div class="opt-name">分享选中的菜</div>
+                    <div class="opt-desc">当前已选 <span id="shareSelectedCount">0</span> 道</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="share-link-info hidden" id="shareLinkInfo"></div>
+        <div class="share-link-box hidden" id="shareLinkBox"></div>
+
+        <div class="share-actions">
+            <button class="share-cancel" id="shareCancelBtn">取消</button>
+            <button class="share-confirm hidden" id="shareConfirmBtn">复制链接</button>
+        </div>
+    </div>
+</div>
+
+<!-- 做菜日历 -->
+<div class="overlay" id="calendarOverlay">
+    <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title"><i>📅</i> <span>做菜日历</span></div>
+        <div class="cal-nav">
+            <button id="calPrevBtn">← 上月</button>
+            <span class="cal-month" id="calMonthLabel"></span>
+            <button id="calNextBtn">下月 →</button>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div class="cal-actions">
+            <button id="calPlanBtn" class="secondary">📌 为今天排菜</button>
+            <button id="calTodayBtn">📍 回到今天</button>
+        </div>
+        <button class="sheet-close-btn" id="calendarCloseBtn" style="margin-top:14px;">关闭</button>
+    </div>
+</div>
+
+<!-- 个人主页 -->
+<div class="overlay" id="profileOverlay">
+    <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title"><i>👤</i> <span>个人主页</span></div>
+
+        <div class="profile-avatar-row">
+            <div class="avatar-preview" id="avatarPreview">👤</div>
+            <div>
+                <input type="file" id="avatarInput" accept="image/*" style="display:none;">
+                <button class="btn-secondary" id="avatarPickBtn">更换头像</button>
+            </div>
+        </div>
+
+        <input type="text" id="nicknameInput" class="input" placeholder="昵称" maxlength="20">
+        <input type="number" id="heightInput" class="input" placeholder="身高 cm" min="50" max="250">
+
+        <button class="btn-primary" id="profileSaveBtn" style="width:100%;margin-bottom:18px;">保存资料</button>
+
+        <h3 style="font-size:15px;color:#4a3723;margin-bottom:10px;">⚖️ 体重记录</h3>
+        <div class="row" style="margin-bottom:10px;">
+            <input type="number" step="0.1" id="weightInput" class="input" placeholder="体重 kg">
+            <input type="date" id="weightDate" class="input">
+            <button class="btn-primary small" id="weightAddBtn">记录</button>
+        </div>
+        <div class="bmi-box hidden" id="bmiBox"></div>
+        <div id="weightChart"></div>
+        <div id="weightList" style="margin-top:12px;"></div>
+
+        <button class="sheet-close-btn" id="profileCloseBtn" style="margin-top:14px;">关闭</button>
+    </div>
+</div>
+
+<!-- 轻食搭配 -->
+<div class="overlay" id="lightOverlay">
+    <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title"><i>🥗</i> <span>轻食搭配</span></div>
+        <div class="tool-section">
+            <h3>🍃 根据冰箱食材推荐</h3>
+            <div id="lightList"></div>
+        </div>
+        <button class="sheet-close-btn" id="lightCloseBtn">关闭</button>
+    </div>
+</div>
+
+<!-- 运动打卡 -->
+<div class="overlay" id="exerciseOverlay">
+    <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title"><i>🏃</i> <span>运动打卡</span></div>
+        <div class="tool-section">
+            <div class="row" style="margin-bottom:10px;">
+                <input type="text" id="exType" class="input" placeholder="运动类型（跑步/瑜伽…）">
+                <input type="number" id="exDuration" class="input" placeholder="分钟" min="1">
+            </div>
+            <button class="btn-primary" id="exAddBtn" style="width:100%;">＋ 打卡</button>
+        </div>
+        <div class="tool-section">
+            <h3>📊 最近 7 天</h3>
+            <div id="exStats"></div>
+        </div>
+        <div class="tool-section">
+            <h3>📋 打卡记录</h3>
+            <div id="exList"></div>
+        </div>
+        <button class="sheet-close-btn" id="exerciseCloseBtn">关闭</button>
+    </div>
+</div>
+
+<!-- 摇一摇结果 -->
+<div class="confirm-overlay" id="shakeOverlay">
+    <div class="confirm-box">
+        <div class="confirm-icon">🎲</div>
+        <div class="confirm-title">今天就吃这个！</div>
+        <div class="confirm-message" id="shakeResult"></div>
+        <div class="confirm-actions">
+            <button class="confirm-cancel" id="shakeCloseBtn">关闭</button>
+            <button class="confirm-ok" id="shakeAgainBtn" style="background:#3d6a9e;">换一个</button>
+        </div>
+    </div>
+</div>
+
+<div class="guest-cart-bar hidden" id="guestCartBar">
+    <div class="cart-info">已选 <span class="cart-count" id="guestCartCount">0</span> 道菜</div>
+    <button class="cart-submit" id="guestSubmitBtn" disabled>生成点菜清单</button>
+</div>
+
+<div class="confirm-overlay" id="confirmOverlay">
+    <div class="confirm-box">
+        <div class="confirm-icon" id="confirmIcon">🗑️</div>
+        <div class="confirm-title" id="confirmTitle">确认删除</div>
+        <div class="confirm-message" id="confirmMessage">确定要删除这道菜吗？</div>
+        <div class="confirm-actions">
+            <button class="confirm-cancel" id="confirmCancelBtn">取消</button>
+            <button class="confirm-ok" id="confirmOkBtn">删除</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
 </body>
 </html>
